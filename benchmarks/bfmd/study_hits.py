@@ -48,7 +48,7 @@ def classify(dense,ball,events,fps,corners):
 
 def run(clip,allow_expensive,methods):
     pfolder=STUDY/'perception'/clip['clip_id'];dense_path=pfolder/'dense_pose.json'
-    if not dense_path.exists():return []
+    if not all((pfolder/f).exists() for f in ['dense_pose.json',*BALLS.values()]):return []  # incomplete perception
     court=court_record(clip,pfolder);rows=[]
     for ball_name,rel in BALLS.items():
         ball_path=pfolder/rel

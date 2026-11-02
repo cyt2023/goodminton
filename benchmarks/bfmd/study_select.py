@@ -103,20 +103,23 @@ def fixed_best(clip_ids,table,key,pool=None):
     common=set.intersection(*[set(available(table,c)) for c in clip_ids]);common&=set(pool or common)
     return max(sorted(common),key=lambda p:pooled({c:p for c in clip_ids},table,key)['f1'])
 
+def choose(av,fc,best,model):
+    """Label-free picks for one clip: av = runnable pipelines, fc = features by route."""
+    cls=best.rsplit('__',1)[1];q=next(iter(fc.values()))  # clip-level quality, identical for every route
+    pred=lambda p:model.predict(p,fc.get(route_of(p),[0]*8))
+    rule=f'rv__shf__{cls}' if q[0]>=.5 and q[1]>=.2 and q[3]>=.6 and f'rv__shf__{cls}' in av else f'rv__gru_shared__{cls}'
+    single=[p for p in av if not p.startswith('vote') and p.endswith(cls)] or av  # no runnable single route: fall back to (empty) votes
+    return {'FIXED_BEST':best if best in av else max(av,key=pred),'RULE_ROUTER':rule,
+            'CONSENSUS':max(single,key=lambda p:fc[route_of(p)][6]+fc[route_of(p)][7]),'LEARNED':max(av,key=pred)}
+
+def fit(train,table,feats,key):
+    return fixed_best(train,table,key),Learned({p for c in train for p in available(table,c)}).fit(samples(train,table,feats,key))
+
 def policies(train,test,table,feats,key):
-    best=fixed_best(train,table,key)
-    model=Learned({p for c in train for p in available(table,c)}).fit(samples(train,table,feats,key))
-    picks={'FIXED_BEST':{},'RULE_ROUTER':{},'CONSENSUS':{},'LEARNED':{},'ORACLE':{}}
+    best,model=fit(train,table,feats,key);picks={}
     for c in test:
-        av=available(table,c);cls=best.rsplit('__',1)[1]
-        picks['FIXED_BEST'][c]=best if best in av else max(av,key=lambda p:model.predict(p,feats[c].get(route_of(p),[0]*8)))
-        q=next(iter(feats[c].values()))  # clip-level quality, identical for every route
-        rule=table[c].get(f'rv__shf__{cls}') if q[0]>=.5 and q[1]>=.2 and q[3]>=.6 else None
-        picks['RULE_ROUTER'][c]=f'rv__shf__{cls}' if rule and rule['status']=='completed' else f'rv__gru_shared__{cls}'
-        single=[p for p in av if not p.startswith('vote') and p.endswith(cls)]
-        picks['CONSENSUS'][c]=max(single,key=lambda p:feats[c][route_of(p)][6]+feats[c][route_of(p)][7])
-        picks['LEARNED'][c]=max(av,key=lambda p:model.predict(p,feats[c][route_of(p)]))
-        picks['ORACLE'][c]=max(av,key=lambda p:f1(table[c][p][f'{key}tp'],table[c][p][f'{key}fp'],table[c][p][f'{key}fn']))
+        av=available(table,c)
+        for k,v in {**choose(av,feats[c],best,model),'ORACLE':max(av,key=lambda p:f1(table[c][p][f'{key}tp'],table[c][p][f'{key}fp'],table[c][p][f'{key}fn']))}.items():picks.setdefault(k,{})[c]=v
     return picks,best,model
 
 def evaluate(key):
@@ -133,10 +136,60 @@ def evaluate(key):
             'fixed_pipelines_in_sample':fixed}
     save(STUDY/f'selection_dev_{key or "hit"}.json',result);return result
 
+def routes_available(clip):
+    """Runnable pipelines from stored route predictions (no references)."""
+    out=[]
+    for f in (STUDY/'routes'/clip['clip_id']).glob('*.json'):
+        r=read(f)
+        if r['status']!='completed':continue
+        for cls in ['bst0','bst_cg_ap']:
+            if not r['hits'] or cls in r['hits'][0]['labels']:out.append(f"{r['perception']}__{r['method']}__{cls}")
+    return sorted(out)
+
+def code_hashes():
+    import hashlib
+    return {f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(Path(__file__).parent.glob('study_*.py'))}
+
+def freeze(key):
+    table=score_table('dev');cs=[c for c in clips('dev') if c['clip_id'] in table];feats={c['clip_id']:features(c) for c in cs}
+    best,model=fit([c['clip_id'] for c in cs],table,feats,key)
+    test=[c['clip_id'] for c in read(STUDY/'clips.json')['clips'] if c['role']=='sealed_test' and all((STUDY/'perception'/c['clip_id']/f).exists() for f in ['dense_pose.json','racketvision/trajectory.json','tracknetv3/trajectory.json'])]
+    packet={'objective':key or 'hit','fixed_best':best,'learned':model.packet(),'dev_clips':[c['clip_id'] for c in cs],'test_clips':test,'policies_reported':['FIXED_BEST','RULE_ROUTER','CONSENSUS','LEARNED','ORACLE'],
+            'note':'All policies are reported on test; none is chosen by test outcome. Perception stopped early by user: test covers only clips with complete perception.','code_sha256':code_hashes()}
+    target=STUDY/'frozen_policy.json'
+    if target.exists():raise ValueError('Policy already frozen')
+    save(target,packet);return packet
+
+def apply():
+    frozen=read(STUDY/'frozen_policy.json')
+    if frozen['code_sha256']!=code_hashes():raise ValueError('Study code changed after freezing')
+    model=Learned(frozen['learned']['pipelines']);w=frozen['learned'];model.w,model.mu,model.sd=np.array(w['weights']),np.array(w['mu']),np.array(w['sd'])
+    picks={}
+    for c in read(STUDY/'clips.json')['clips']:
+        if c['clip_id'] not in frozen['test_clips']:continue
+        build_votes(c);av=routes_available(c)
+        for k,v in choose(av,features(c),frozen['fixed_best'],model).items():picks.setdefault(k,{})[c['clip_id']]=v
+    target=STUDY/'test_picks.json'
+    if target.exists():raise ValueError('Test picks already written')
+    save(target,picks);return picks
+
+def report(key):
+    table=score_table('sealed_test');picks=read(STUDY/'test_picks.json');ids=sorted(next(iter(picks.values())))
+    picks['ORACLE']={c:max(available(table,c),key=lambda p:f1(table[c][p][f'{key}tp'],table[c][p][f'{key}fp'],table[c][p][f'{key}fn'])) for c in ids}
+    common=set.intersection(*[set(available(table,c)) for c in ids])
+    result={'clips':len(ids),'policies':{k:{'joint':pooled(v,table,'type_'),'hit':pooled(v,table,''),'choices':{p:list(v.values()).count(p) for p in sorted(set(v.values()))}} for k,v in picks.items()},
+            'fixed_pipelines':{p:{'joint':pooled({c:p for c in ids},table,'type_'),'hit':pooled({c:p for c in ids},table,'')} for p in sorted(common)}}
+    save(STUDY/'selection_test.json',result);return result
+
 if __name__=='__main__':
-    a=argparse.ArgumentParser();a.add_argument('step',choices=['votes','evaluate']);a.add_argument('--role',default='dev');a.add_argument('--objective',choices=['joint','hit'],default='joint');a=a.parse_args()
+    a=argparse.ArgumentParser();a.add_argument('step',choices=['votes','evaluate','freeze','apply','report']);a.add_argument('--role',default='dev');a.add_argument('--objective',choices=['joint','hit'],default='joint');a=a.parse_args()
     if a.step=='votes':
         for c in clips(a.role):build_votes(c)
+    elif a.step=='freeze':print(json.dumps({k:v for k,v in freeze('type_' if a.objective=='joint' else '').items() if k!='learned'},ensure_ascii=False)[:600])
+    elif a.step=='apply':print({k:len(v) for k,v in apply().items()})
+    elif a.step=='report':
+        r=report('type_' if a.objective=='joint' else '')
+        for k,v in r['policies'].items():print(f"{k:12s} joint F1 {v['joint']['f1']:.3f}  hit F1 {v['hit']['f1']:.3f}")
     else:
         r=evaluate('type_' if a.objective=='joint' else '')
         for k,v in r['policies'].items():print(f"{k:12s} joint F1 {v['joint']['f1']:.3f}  hit F1 {v['hit']['f1']:.3f}")
