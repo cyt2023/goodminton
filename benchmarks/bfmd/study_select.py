@@ -70,11 +70,13 @@ def score_table(role):
     for r in rows:table.setdefault(r['clip_id'],{})[r['pipeline']]=r
     return table
 
-def f1(tp,fp,fn):return 2*tp/(2*tp+fp+fn) if 2*tp+fp+fn else 0.
+def f1(tp,fp,fn):
+    tp,fp,fn=tp or 0,fp or 0,fn or 0  # None = no typed reference in clip
+    return 2*tp/(2*tp+fp+fn) if 2*tp+fp+fn else 0.
 def pooled(picks,table,key):
     tp=fp=fn=0
     for clip,p in picks.items():
-        r=table[clip][p];tp+=r[f'{key}tp'];fp+=r[f'{key}fp'];fn+=r[f'{key}fn']
+        r=table[clip][p];tp+=r[f'{key}tp'] or 0;fp+=r[f'{key}fp'] or 0;fn+=r[f'{key}fn'] or 0
     return {'f1':f1(tp,fp,fn),'tp':tp,'fp':fp,'fn':fn}
 
 def route_of(pipeline):return pipeline.rsplit('__',1)[0]
@@ -177,7 +179,7 @@ def apply():
     save(target,picks);return picks
 
 def report(key):
-    table=score_table('sealed_test');picks=read(STUDY/f'test_picks{SUFFIX}.json');ids=sorted(next(iter(picks.values())))
+    table=score_table(read(STUDY/f'frozen_policy{SUFFIX}.json').get('test_role','sealed_test'));picks=read(STUDY/f'test_picks{SUFFIX}.json');ids=sorted(next(iter(picks.values())))
     picks['ORACLE']={c:max(available(table,c),key=lambda p:f1(table[c][p][f'{key}tp'],table[c][p][f'{key}fp'],table[c][p][f'{key}fn'])) for c in ids}
     common=set.intersection(*[set(available(table,c)) for c in ids])
     result={'clips':len(ids),'policies':{k:{'joint':pooled(v,table,'type_'),'hit':pooled(v,table,''),'choices':{p:list(v.values()).count(p) for p in sorted(set(v.values()))}} for k,v in picks.items()},
