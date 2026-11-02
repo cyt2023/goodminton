@@ -13,7 +13,7 @@ def prf(tp,fp,fn):
 def assign(pred,truth,tolerance,labels=False):
     if not pred or not truth:return []
     delta=np.abs(np.array([r['time'] for r in pred])[:,None]-np.array([r['time'] for r in truth])[None,:])
-    valid=delta<=tolerance
+    valid=delta<=tolerance+1e-6  # frame-quantized times: exactly one tolerance apart still matches
     if labels:valid&=np.array([[a.get('label')==b.get('label') and a.get('label') is not None for b in truth] for a in pred])
     a,b=linear_sum_assignment(np.where(valid,delta,1e6));return [(int(i),int(j)) for i,j in zip(a,b) if valid[i,j]]
 def average_precision(pred,truth,threshold):

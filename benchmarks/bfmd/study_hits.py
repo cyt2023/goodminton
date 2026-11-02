@@ -2,7 +2,7 @@
 then classify each candidate with BST-0 and (with reviewed court) BST-CG-AP.
 Writes predictions only; BFMD references are read by study_score.py.
 """
-import argparse,json,sys,time
+import argparse,json,os,sys,time
 from pathlib import Path
 from types import SimpleNamespace
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
@@ -11,6 +11,7 @@ from professional_agents.hit_tools import inventory,run_method
 from professional_agents.retrieval import mainland
 from professional_agents.state import sha
 STUDY=ROOT.parent/'03_数据/独立基准/BFMD/pipeline_study'
+VARIANT=os.environ.get('BFMD_VARIANT','');SUFFIX=f'_{VARIANT}' if VARIANT else '';ROUTES=STUDY/f'routes{SUFFIX}'  # v2 = refined timing + filters
 BALLS={'rv':'racketvision/trajectory.json','tn3':'tracknetv3/trajectory.json'}
 SHARED_METHODS=['rules','fusion','gru_shared','shf','hitnet','rgb_resnet']
 
@@ -37,10 +38,11 @@ def classify(dense,ball,events,fps,corners):
     if corners is not None:models['bst_cg_ap']=SpecialistBST(dense,ball,calibration(corners))
     n=len(dense['frames']);out=[]
     for e in events:
-        i=e['frame_index'];lo,hi=max(0,i-round(fps)),min(n-1,i+round(fps))
+        i=e['frame_index'];w=e.get('raw_frame_index',i)  # BST window stays on the detector's frame; reported time uses refined frame
+        lo,hi=max(0,w-round(fps)),min(n-1,w+round(fps))
         row={'frame_index':i,'time':dense['frames'][i]['source_time'],'player':e.get('player'),'hit_score':e.get('hit_model_score'),'labels':{}}
         for name,model in models.items():
-            values,_=model.inputs({**e,'start_frame':lo,'end_frame':hi,'peak_time':row['time']});pred=model.predict(values)
+            values,_=model.inputs({**e,'start_frame':lo,'end_frame':hi,'peak_time':dense['frames'][w]['source_time']});pred=model.predict(values)
             ranked=pred['bst_full'] if name=='bst_cg_ap' else pred['bst0']
             row['labels'][name]={'label':mainland(ranked[0]['label']),'raw':ranked[0]['label'],'score':ranked[0]['softmax_score']}
         out.append(row)
@@ -57,11 +59,16 @@ def run(clip,allow_expensive,methods):
         info=inventory(state,allow_expensive=allow_expensive);dense=read(dense_path);ball=read(ball_path);fps=dense['sample_fps']
         for method in methods:
             if method=='gru_original' and ball_name!='rv':continue  # own TrackNetV2/HRNet frontend; run once
-            target=STUDY/'routes'/clip['clip_id']/f"{'author' if method=='gru_original' else ball_name}__{method}.json"
+            target=ROUTES/clip['clip_id']/f"{'author' if method=='gru_original' else ball_name}__{method}.json"
             if target.exists():rows.append(read(target));continue
             started=time.perf_counter();result=run_method(method,state,info,STUDY/'hit_runs',3600)
             seconds=time.perf_counter()-started
-            hits=classify(dense,ball,result['events'],fps,info['author_corners']) if result['status']=='completed' else []
+            events=result['events']
+            if VARIANT and result['status']=='completed':
+                from benchmarks.bfmd.refine import postprocess
+                events=postprocess(events,ball)
+                for e in events:e['hit_model_score']=e.get('hit_model_score',e.get('confidence'))
+            hits=classify(dense,ball,events,fps,info['author_corners']) if result['status']=='completed' else []
             packet={'clip_id':clip['clip_id'],'role':clip['role'],'perception':'author' if method=='gru_original' else ball_name,'method':method,'status':result['status'],'reason':result.get('reason'),
                     'hit_seconds':seconds if not result.get('cache_hit') else None,'cache_hit':result.get('cache_hit'),'inputs':info['quality'],'eligibility':info['methods'][method],'hits':hits,'annotation_inputs':[]}
             save(target,packet);rows.append(packet)
