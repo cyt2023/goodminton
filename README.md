@@ -17,6 +17,26 @@
 
 选择 Agent 只读取不含标注的信息（双人姿态覆盖、球可见率、有效窗口比例、各找拍器之间的一致性），为每个回合从约 30 套 感知 × 找拍 × 分类 组合中选一套。
 
+## 目录结构
+
+| 位置 | 内容 |
+|---|---|
+| 根目录 `*.py` | 核心模块：网站与任务（`server.py`、`*_jobs.py`）、感知、找拍、BST 分类、标注与个人学习、研究集成 |
+| `professional_agents/` | 四 Agent、工具注册、控制器、工作流搜索 |
+| `paper_reproductions/` | ShuttleHitFormer、DSTA 本地复现与配置 |
+| `benchmarks/` | BFMD 导入、评分、流水线选择实验、数据隔离 |
+| `research_models/` | 模型登记、架构与融合设置 |
+| `static/` | 网页前端 |
+| `scripts/audit/` | 历史输入/时间/身份问题审计 |
+| `scripts/diagnose/` | 故障诊断与一致性校验 |
+| `scripts/evaluate/` | 离线评价与基准 |
+| `scripts/reproduce/` | 原作者流程复现与权重转换 |
+| `scripts/data_prep/` | 数据导入与预处理 |
+| `scripts/reports/` | 报告与证据图生成 |
+| `tests/` | 单元与集成测试 |
+
+`scripts/` 和 `tests/` 中的文件会自动把原型根目录加入 `sys.path`，可以从任意目录运行。
+
 ## BFMD 流水线选择实验
 
 `benchmarks/bfmd/` 中的脚本在 BFMD 职业单打上比较各流水线和选择策略：
