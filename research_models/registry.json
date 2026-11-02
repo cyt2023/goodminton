@@ -1,0 +1,123 @@
+{
+  "verified_on": "2026-10-29",
+  "racketvision": {
+    "name": "RacketVision BallTrack + RacketPose",
+    "status": "available",
+    "kind": "model_inference",
+    "source": "https://github.com/OrcustD/RacketVision",
+    "code_revision": "c44af2a08524d3cb54d818f19686f4cdea4d2793",
+    "weights_source": "https://huggingface.co/linfeng302/RacketVision-Models",
+    "weights_revision": "a3760773233a0988c9605259743fbdd87c59d3a3",
+    "input": "Original consecutive BGR video frames; median background; racket detector boxes",
+    "output": "Native-frame shuttle XY and five racket keypoints with scores",
+    "hardware": "CPU, CUDA, Apple Silicon MPS (local NMS/InstanceData compatibility); legacy dependencies isolated",
+    "limitations": [
+      "Counts and heatmap scores are not accuracy",
+      "Clip-specific sampled median differs from author match-wide preprocessing",
+      "Released inference.py's input is one frame early; this adapter follows author training dataset alignment",
+      "Racket keypoints are 2D, not a validated 3D face normal"
+    ]
+  },
+  "shuttlehitformer": {
+    "name": "ShuttleHitFormer",
+    "status": "unavailable",
+    "kind": "unavailable",
+    "source": "https://doi.org/10.1587/transinf.2026EDP7100",
+    "reason": "本地修正版已完成训练和公开坐标特征测试：职业找拍F1为91.5%，业余55.8%（±3帧）。已修复信息丢失、训练不足和权重选择；不使用缺失的球网点。原始录像自动提取特征后的端到端效果仍未验证，当前默认报告不使用实验权重。",
+    "input": [
+      "player skeleton sequences",
+      "shuttle trajectory",
+      "court keypoints",
+      "net keypoints"
+    ],
+    "output": "frame-level hit probability; player attribution not independently validated by the reported event metric",
+    "import_supported": true,
+    "protocol": {
+      "window_frames": 8,
+      "center_offsets": [
+        -3,
+        4
+      ],
+      "stride": 1,
+      "threshold": 0.5,
+      "nms_frames": 8,
+      "event_matching_tolerance_frames": 3
+    },
+    "hitter_attribution_available": false,
+    "implementation_status": "implemented_locally_from_paper",
+    "implementation_path": "paper_reproductions/shuttlehitformer.py",
+    "training_status": "trained_local_variant_feature_evaluated",
+    "production_ready": false,
+    "local_runner": ".venv-vision/bin/python -m paper_reproductions.run",
+    "pilot_results": "../03_数据/论文模型复现/2026-10-29/shf_run/result.json",
+    "limitations": [
+      "Explicit local residual and court-only variant; not the unpublished author implementation",
+      "Published feature data evaluation does not measure raw-video frontend quality",
+      "Amateur transfer recall45.9%; substantial missed contacts remain",
+      "Collections previously inspected in project development; fresh independent videos still needed"
+    ],
+    "local_variant": "aligned_stream_residual_court_only",
+    "local_checkpoint": "/Users/cyt/Desktop/羽毛球论文/03_数据/论文模型复现/2026-10-29_修复/aligned_calibrated/calibrated.pt",
+    "checkpoint_sha256": "c600b27e5e7dc25be74ce96143d6b597943e5694ca8a95364fd6845292d189d2",
+    "evaluation": {
+      "input": "published pose/shuttle/court coordinate features, including manual/human-associated measurements",
+      "metric": "micro event F1",
+      "tolerance_frames": 3,
+      "scope": "development evaluation; not end-to-end raw video or an untouched final benchmark",
+      "groups": {
+        "professional_feature_test": {
+          "precision": 0.9154929577464789,
+          "recall": 0.9154929577464789,
+          "f1": 0.9154929577464789,
+          "tp": 195,
+          "fp": 18,
+          "fn": 18
+        },
+        "amateur_feature_transfer": {
+          "precision": 0.7102803738317757,
+          "recall": 0.459214501510574,
+          "f1": 0.5577981651376147,
+          "tp": 152,
+          "fp": 62,
+          "fn": 179
+        }
+      }
+    }
+  },
+  "dsta": {
+    "name": "DSTA + VideoMAE + ActionFormer",
+    "status": "unavailable",
+    "kind": "unavailable",
+    "source": "https://arxiv.org/abs/2605.23355",
+    "reason": "Paper-derived local architecture, training and inference implemented; local pilot weights are experimental. No validated official or locally benchmarked full-training checkpoint.",
+    "input": "Independent RGB video feature pathway, resampled 25 fps, 160x160; temporal, vertical and horizontal adapters",
+    "output": "stroke intervals with fine-grained class scores",
+    "import_supported": true,
+    "label_mapping": "label_map.json; retain unknown official labels; no invented numeric class order",
+    "implementation_status": "implemented_locally_from_paper",
+    "implementation_path": "paper_reproductions/dsta.py",
+    "training_status": "local_pilot_checkpoint_not_validated",
+    "production_ready": false,
+    "local_runner": ".venv-vision/bin/python -m paper_reproductions.run",
+    "pilot_results": "../03_数据/论文模型复现/2026-10-29/dsta_run/result.json",
+    "foundation_checkpoint": "models/paper_reproductions/videomae_b_k400.pth"
+  },
+  "explainable_assessment": {
+    "name": "ERA 2026 six SPIs + hierarchical Mamdani fuzzy inference",
+    "status": "formulas_available_measurements_limited",
+    "kind": "paper_formula_implementation",
+    "source": "https://doi.org/10.3934/era.2026333",
+    "formula_pages": "14-20, Eqs.15-32; membership Figures11-12; rule Tables1-2",
+    "reason": "COCO17 lacks hand points; monocular video lacks validated wrist metric scale and racket 3D normals; stroke-specific validated reference parameters are required. Raw 2D observations are separate from quality scores.",
+    "overall_score_available_for_current_video": false
+  },
+  "monocular_pose3d": {
+    "name": "Optional MediaPipe monocular3D pose",
+    "status": "optional_available",
+    "kind": "estimated_model_measurement",
+    "source": "https://doi.org/10.1109/ICCE-Taiwan71481.2026.11652777",
+    "reason": "Hip-origin3D estimates with uncalibrated depth and scale;2D baseline retained. No action classifier is added.",
+    "default_enabled": false,
+    "global_translation_available": false
+  }
+}

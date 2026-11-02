@@ -1,0 +1,16 @@
+# Environments and caches
+.venv*/
+.deps/
+.huggingface-local-vision/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Model weights and third-party checkouts (see models/*manifest.json locally)
+models/
+vendor/
+
+# Local job / review data (may reference personal recordings)
+pose_jobs.json
+phase_candidates.json
+*.log

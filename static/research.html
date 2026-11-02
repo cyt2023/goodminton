@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>羽毛球论文 · 研究工作台</title>
+<style>
+[hidden]{display:none!important}:root{--ink:#172e29;--green:#17654d;--muted:#667c74;--line:#dce5df;--paper:#f4f7f2}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}header{background:#173d32;color:#fff;padding:32px max(24px,calc((100vw - 1240px)/2))}header small{color:#b5d6c6;letter-spacing:2px}h1{font-size:30px;line-height:1.3;margin:8px 0}header p{margin:8px 0;color:#d3e2d8}main{max-width:1288px;padding:24px;margin:auto}.notice{border-left:4px solid #c4a055;background:#fff8e9;padding:12px 18px;border-radius:5px;margin-bottom:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:20px}h2{font-size:20px;margin:0 0 12px}h3{font-size:17px;margin:10px 0}.muted{color:var(--muted);font-size:13px}label{display:block;font-size:13px;color:#456157;margin-top:12px}input,select,textarea{width:100%;font:inherit;padding:10px 12px;border:1px solid #ccd9d0;border-radius:7px;background:#fff;color:var(--ink)}textarea{min-height:76px;resize:vertical}input[type=checkbox]{width:auto}button{cursor:pointer;font:inherit;border:0;border-radius:8px;background:var(--green);color:white;padding:10px 17px;margin-top:14px}button:disabled{opacity:.5;cursor:wait}.secondary{background:#e8efe9;color:var(--ink)}.row{display:flex;gap:12px;align-items:end}.row>*{flex:1}.conditions{display:grid;grid-template-columns:repeat(2,1fr);gap:0 12px}.checks{display:flex;gap:12px;flex-wrap:wrap}.checks label{font-size:13px}video,iframe{width:100%;border:0;border-radius:10px;background:#16231e;aspect-ratio:16/9;margin-top:12px}video{object-fit:contain}.placeholder{padding:34px 18px;border:1px dashed #b9cdc0;border-radius:10px;text-align:center;color:var(--muted);margin-top:12px}.result{border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:12px}.result.selected{border:2px solid var(--green)}.chips{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}.chip{border-radius:5px;background:#eaf4ed;padding:3px 7px;font-size:12px}.chip.warn{background:#fff0d5}.chip.unknown{background:#eef0ef;color:#68776e}#status{position:sticky;top:8px;z-index:2;background:#e7f1e9;border-radius:7px;padding:8px 14px;margin-bottom:14px;display:none}a{color:var(--green)}details summary{cursor:pointer;font-weight:600}pre{white-space:pre-wrap;word-break:break-word;font-size:12px}footer{color:var(--muted);font-size:12px;padding:12px 0}@media(max-width:850px){.grid{grid-template-columns:1fr}.row{flex-wrap:wrap}header{padding:24px}main{padding:16px}}
+</style>
+<style>
+.pose-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}.pose-stat{background:#f4f7f2;border:1px solid var(--line);border-radius:9px;padding:14px}.pose-stat h3{margin:0 0 8px}.pose-stat dl{display:grid;grid-template-columns:1fr auto;gap:4px 12px;margin:0;font-size:13px}.pose-stat dt{color:var(--muted)}.pose-stat dd{margin:0;font-variant-numeric:tabular-nums}.pose-meta{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.pose-meta span{background:#eef2ee;border-radius:5px;padding:3px 8px;font-size:12px}.pose-evidence{border-top:1px solid var(--line);margin-top:16px;padding-top:12px}.pose-empty{margin-top:12px}.pose-view label{margin-top:0}.pose-actions{display:flex;gap:12px;flex-wrap:wrap}.pose-actions button{margin-top:0}@media(max-width:600px){.pose-stats{grid-template-columns:1fr}}
+.phase-panel{border-top:1px solid var(--line);margin-top:24px;padding-top:20px}.phase-list{display:grid;gap:8px;margin-top:12px}.phase-item{border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}.phase-item.selected{border:2px solid var(--green);padding:11px}.phase-item h4{margin:0;font-size:14px}.phase-item p{margin:6px 0}.phase-item button{margin-top:6px;padding:7px 12px;font-size:13px}.phase-editor{margin-top:18px;padding:18px;background:#f5f8f3;border:1px solid var(--line);border-radius:10px}.phase-editor h3{margin-top:0}.phase-editor label{margin-top:12px}.phase-badge{font-size:12px;border-radius:5px;padding:3px 7px;background:#fff0d5;display:inline-block}.phase-badge.confirmed{background:#e4f2e9;color:#17654d}.phase-badge.rejected{background:#eef0ef;color:#68776e}.phase-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.phase-controls button{margin-top:0}.phase-dirty{font-size:13px;color:#8f6217}.phase-side{padding:14px;border:1px solid var(--line);border-radius:10px}
+.reference-meta{display:grid;grid-template-columns:150px 1fr;gap:6px 12px;background:#f4f7f2;border-radius:8px;padding:12px;font-size:13px}.reference-meta dt{color:var(--muted)}.reference-meta dd{margin:0;overflow-wrap:anywhere}@media(max-width:600px){.reference-meta{grid-template-columns:110px 1fr}}
+.analysis-canvas{display:block;width:100%;height:auto;border-radius:10px;background:#16231e;touch-action:none;cursor:crosshair;margin-top:14px}.analysis-tools{display:grid;grid-template-columns:1fr 1fr;gap:16px}.analysis-tools label{margin-top:8px}.analysis-region-config{border:1px solid var(--line);border-radius:8px;padding:12px;font-size:13px;overflow-wrap:anywhere}.analysis-region-config h4{margin:0 0 8px}.analysis-color-near{color:#24b6e2}.analysis-color-far{color:#f7a943}.analysis-jobs{display:grid;gap:12px;margin-top:14px}.analysis-job{border:1px solid var(--line);border-radius:9px;padding:14px}.analysis-job h4{margin:0 0 8px}.analysis-job p{margin:6px 0}.analysis-job progress{width:100%;accent-color:var(--green)}.analysis-job button{margin-top:6px}.analysis-config-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}@media(max-width:650px){.analysis-tools,.analysis-config-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><small>BADMINTON · RESEARCH WORKSPACE</small><h1>从个人问题，找到适用的示范</h1><p>单打后场头顶击球与回位 · 个人片段 / 条件记录 / 职业示范对照</p></header>
+<main><div id="status" role="status"></div>
+<div class="notice">当前为研究原型：人工记录、条件检索与离线姿态结果查看。姿态检测需要核对，尚未提供自动动作诊断与 AI 追问。个人录像、分析结果和标注保存在这台电脑；职业比赛通过来源网站播放。</div>
+<div class="grid">
+<section class="card"><h2>01 / 记录个人问题</h2><p class="muted">先选一段回合，记录你看见的事实和想问的问题。时间单位为秒。</p>
+<label>上传个人录像（最多 1GB，推荐短片段）<input type="file" id="personalFile" accept="video/mp4,video/quicktime,video/webm,.m4v"></label>
+<label>已导入录像<select id="personalVideo"></select></label><div id="personalPlayer"></div>
+<label>分析对象<select id="pTarget"><option value="near">近端球员</option><option value="far">远端球员</option><option value="unconfirmed">待确认</option></select></label>
+<label>案例名称<input id="pTitle" placeholder="例如：第三局后场高远球偏短"></label>
+<div class="row"><label>开始时间<input id="pStart" type="number" min="0" step="0.1" value="0"></label><label>结束时间<input id="pEnd" type="number" min="0" step="0.1" value="10"></label></div>
+<button class="secondary" id="previewPersonal">播放选定片段</button>
+<label>你的问题<textarea id="pQuestion" placeholder="例如：为什么这一拍之后我来不及回位？"></textarea></label>
+<label>这一拍的意图<input id="pIntent" placeholder="由你自己补充，暂不确定可留空"></label>
+<label>可观察的事实<textarea id="pObservation" placeholder="记录时间点和观察；不要把候选原因写成已确定的事实"></textarea></label>
+<div class="conditions" id="pConditions"></div><label>重点关注</label><div class="checks" id="pFocus"></div>
+<button id="savePersonal">保存个人案例</button>
+</section>
+<section class="card"><h2>02 / 职业候选与示范记录</h2><p class="muted">添加真实片段并核对条件。起止时间指向原视频，不把职业身份或得分当作正确性标签。</p>
+<h3>浏览已存职业候选</h3><p class="muted" id="referenceBrowseCount">正在读取候选列表…</p>
+<label>选择候选（只读）<select id="referenceBrowse"></select></label><button id="viewStoredReference" class="secondary">查看来源片段与标注</button>
+<div id="referenceBrowsePlayer" class="placeholder">选择候选后查看。作者标签和展示时间窗口仍需结合原视频核对。</div><div id="referenceBrowseDetails"></div>
+<h3 style="margin-top:22px">添加新示范记录</h3>
+<label>上传示范录像<input id="referenceFile" type="file" accept="video/mp4,video/quicktime,video/webm,.m4v"></label>
+<label>已导入示范<select id="referenceVideo"></select></label>
+<label>或填写公开视频地址<input id="rUrl" type="url" placeholder="YouTube 或可访问的视频地址"></label>
+<label>比赛、球员与片段名称<input id="rTitle" placeholder="填写来源和目标击球"></label>
+<div class="row"><label>开始时间<input id="rStart" type="number" min="0" step="0.1" value="0"></label><label>结束时间<input id="rEnd" type="number" min="0" step="0.1" value="10"></label></div>
+<div class="conditions" id="rConditions"></div><label>相关技术环节</label><div class="checks" id="rFocus"></div>
+<label>片段中的可观察证据<textarea id="rObservation" placeholder="例如：击球后哪只脚先落地；对应什么时间点"></textarea></label>
+<label>可学习的要点<textarea id="rTeaching" placeholder="需要由录像与专业判断支持"></textarea></label>
+<label>适用边界与未知条件<textarea id="rLimits" placeholder="哪些情况不宜直接模仿，哪些信息画面无法确定"></textarea></label>
+<div class="row"><label><input id="rReviewed" type="checkbox"> 已由球员或教练核对</label><label>核对人<input id="rReviewer" placeholder="姓名或研究编号"></label></div>
+<button id="saveReference">保存示范</button>
+</section></div>
+<section class="card" id="localAnalysisSection"><h2>03 / 开始本地姿态分析</h2><p class="muted">先在上方选个人录像和起止时间，单次最多 30 秒。指定一侧或双方的画面区域后，才开始本地骨架提取；结果需要核对，尚不提供技术诊断。</p>
+<p id="analysisSelection" class="muted">请选择个人录像。</p>
+<div class="row"><button id="captureAnalysisStart" class="secondary">跳到片段开始并取画面</button><button id="captureAnalysisCurrent" class="secondary">截取当前画面</button></div>
+<div class="analysis-tools"><div><label>当前标注对象<select id="analysisSide"><option value="near">近端球员 · 青蓝色</option><option value="far">远端球员 · 橙色</option></select></label><label>画面操作<select id="analysisDrawMode"><option value="region">拖动框出脚部移动区域</option><option value="anchor">点击起始脚部锚点</option></select></label></div><div><div class="checks"><label><input id="analysisUseNear" type="checkbox" checked> 分析近端</label><label><input id="analysisUseFar" type="checkbox"> 分析远端</label></div><p class="muted">先框出脚部在整个片段中可能移动的区域，再在片段起始画面点选脚部附近作为锚点。看不到另一侧时可只选一侧。</p><button id="resetAnalysisSide" class="secondary">重置当前一侧</button><button id="resetAnalysisAll" class="secondary">清除双方区域</button></div></div>
+<div id="analysisCanvasEmpty" class="placeholder">取出本地录像画面后，拖动框选区域。</div><canvas id="analysisCanvas" class="analysis-canvas" width="960" height="540" hidden aria-label="框选球员脚部移动区域并点选锚点"></canvas>
+<p id="analysisFrameInfo" class="muted" role="status"></p><div id="analysisRegionConfig" class="analysis-config-grid"></div>
+<p class="muted">建议先原速观看整个短片，保证各侧脚部始终处于对应区域；区域与锚点按原画面归一化保存。重新取画面保留框选，请核对起始锚点。每秒抽样 10 帧。</p>
+<label>分析结果名称<input id="analysisLabel" placeholder="例如：第三段 9–14 秒 · 双方姿态候选"></label><button id="startLocalAnalysis">开始本地分析</button>
+<div class="phase-panel"><div class="phase-controls"><h3 style="margin:0">最近分析任务</h3><button id="refreshAnalysisJobs" class="secondary">刷新任务</button></div><p class="muted">一次运行一个任务，最多另排队三个。上传录像不会自动开始分析，任务完成后可查看姿态证据。</p><p id="analysisJobStatus" class="muted" role="status"></p><div id="analysisJobs" class="analysis-jobs"></div></div>
+</section>
+<section class="card" id="poseSection"><h2>04 / 双边姿态证据</h2><p class="muted">查看离线模型产生的骨架与时间戳。近端、远端按画面位置区分；模型输出待核对，未确认跨回合或换边后的球员身份。</p>
+<div class="row"><label>选择姿态分析结果<select id="poseSelect"></select></label><button id="reloadPose" class="secondary">刷新结果</button><button id="downloadPose" class="secondary" disabled>下载完整 JSON</button></div>
+<div id="poseEmpty" class="placeholder pose-empty">尚无姿态分析结果。离线处理完成后，可在这里查看。</div>
+<div id="poseView" class="pose-view" hidden>
+<div class="pose-meta" id="poseMeta"></div><div class="notice" id="poseQuality"></div>
+<div class="pose-stats" id="poseStats"></div>
+<p class="muted">关节组覆盖以全部抽样帧为分母；一组的左右两点均达到显示阈值且位于画面内，才计入。肩、髋、踝帧数不包含肘和腕的检查，不能代表完整挥拍动作可用。</p>
+<div class="grid"><div><h3>骨架叠加片段</h3><div id="poseOverlay"></div><p class="muted" id="poseTime">原视频时刻：待确认</p></div><div><h3>原视频证据</h3><div id="poseSource"></div><p class="muted">选择下方时间点可同时跳转两段录像，核对关节是否落在目标球员身上。</p></div></div>
+<div class="pose-evidence"><label>查看时间点<select id="poseFrame"></select></label><p class="muted" id="poseFrameNote"></p><div id="poseFrameDetail"></div></div>
+<p class="muted">检测覆盖表示模型分配到近端或远端球员的抽样帧比例，不是识别准确率。关节分数未经校准，不能直接证明姿态正确或技术好坏；未返回分数时显示待确认。</p>
+<div class="phase-panel" id="phasePanel"><h3>动作阶段校正</h3><p class="muted">分别核对两位球员的可见动作阶段。请用原速录像逐段核对，候选不作为独立真值。阶段可以重叠、重复或留空，不要求填满片段。保存候选不会自动变成人工确认，也不会生成技术错误或因果诊断。</p>
+<div class="phase-controls"><button id="reloadPhases" class="secondary">重新读取阶段记录</button><button id="savePhasePlayers" class="secondary" disabled>保存双方记录</button><button id="exportPhases" class="secondary" disabled>导出阶段 JSON</button><button id="discardPhaseDraft" class="secondary" hidden>放弃草稿并读取最新</button><span id="phaseStatus" class="muted" role="status"></span></div>
+<p class="muted" id="phaseQualityNote"></p>
+<p class="muted">未保存草稿仅在当前页面内保留，关闭前请保存或导出。</p>
+<div class="grid" id="phaseSides"></div>
+<div class="phase-editor" id="phaseEditor" hidden><h3 id="phaseEditorTitle">编辑阶段记录</h3><p class="muted" id="phaseProvenance"></p>
+<label>动作组编号<input id="phaseEventId" placeholder="例如：V03-N-01；同一组动作的阶段使用同一编号"></label>
+<div class="row"><label>开始时间（原视频秒）<input id="phaseStart" type="number" min="0" step="0.01"></label><label>结束时间（原视频秒）<input id="phaseEnd" type="number" min="0" step="0.01"></label></div>
+<div class="row"><button id="phaseStartFromVideo" class="secondary">以叠加画面设开始</button><button id="phaseEndFromVideo" class="secondary">以叠加画面设结束</button><button id="phaseJump" class="secondary">跳到阶段开始</button></div>
+<label>动作阶段<select id="phaseKind"></select></label><label>阶段含义<textarea id="phaseMeaning" placeholder="只描述此阶段在录像中可见的动作；不填写未经证实的技术原因"></textarea></label>
+<label>质量与可见性观察<textarea id="phaseQuality" placeholder="例如：肘腕遮挡、骨架错位、边界不清楚；不要把分数当作技术好坏"></textarea></label>
+<div class="row"><label>核对状态<select id="phaseReviewState"></select></label><label>核对人<input id="phaseReviewer" placeholder="人工确认时填写姓名或研究编号"></label></div>
+<div class="phase-controls" style="margin-top:16px"><button id="savePhase">保存阶段与双方修改</button><span id="phaseDirty" class="phase-dirty"></span></div>
+<p class="muted">保存会提交当前片段的双方记录。确认或排除需填写核对人；候选来源、粗略边界与触球状态由记录保留。</p>
+</div></div>
+</div></section>
+<section class="card"><h2>05 / 检索与对照</h2><div class="row"><label>选择个人案例<select id="caseSelect"></select></label><button id="search">检索示范</button><button id="export" class="secondary">导出研究标注</button></div>
+<p class="muted">候选按已记录条件和问题环节排序；未知条件不计作匹配。不同条件需逐项判断，分数不是适用概率。</p><div id="results"></div>
+<div class="grid" id="comparison" hidden><div><h3>你的片段</h3><div id="comparePersonal"></div></div><div><h3>职业示范</h3><div id="compareReference"></div></div></div>
+<div id="explanation"></div>
+</section><footer>数据来源：你导入的真实录像、手动标注、离线姿态输出及 ShuttleSet 作者标注（含 BST 作者修正）。职业候选通过赛事来源外链查看；数据集标签和展示窗口需人工核对。本原型不会上传个人录像到外部模型。</footer></main>
+<script>
+const token='__SESSION_TOKEN__';let state=null,lastResult=null,poseIndex=[],currentPose=null,poseFrames=[],poseOverlay=null,poseSource=null,poseRequest=0;
+let phaseDocument=null,phasePlayers=null,phaseSelected=null,phaseDirty=false,phaseLoading=0;const phaseDraftCache=new Map();
+let phaseSaving=false;
+let analysisFrame=null,analysisDrag=null,analysisJobTimer=null,analysisJobsBusy=false,analysisFocusJobId=null,analysisSubmitting=false,analysisCaptureBusy=false,analysisLastJobs=[];
+const analysisRegions={near:{foot_gate:null,anchor:null},far:{foot_gate:null,anchor:null}},analysisJobStates=new Map();
+const $=id=>document.getElementById(id);
+function status(text,error=false){$('status').textContent=text;$('status').style.display='block';$('status').style.background=error?'#fff0d5':'#e7f1e9'}
+async function api(path,body){const res=await fetch(path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json','X-Session-Token':token}:{},body:body?JSON.stringify(body):undefined});const data=await res.json();if(!res.ok)throw new Error(data.error||'请求失败');return data}
+function element(tag,text,cls){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el}
+function selectFill(el,items,empty){const current=el.value;el.replaceChildren();const first=element('option',empty);first.value='';el.append(first);for(const item of items){const o=element('option',item.title||item.name);o.value=item.id;el.append(o)}if(items.some(i=>i.id===current))el.value=current}
+function buildFields(prefix){for(const [key,options] of Object.entries(state.labels)){const names={stroke:'击球类型',corner:'后场区域',incoming:'来球条件',arrival:'到位情况',balance:'身体平衡'};const label=element('label',names[key]);const select=element('select');select.id=prefix+'_'+key;for(const [value,text]of Object.entries(options)){const o=element('option',text);o.value=value;select.append(o)}label.append(select);$(prefix+'Conditions').append(label)}for(const [value,text]of Object.entries(state.focus)){const label=element('label');const check=element('input');check.type='checkbox';check.value=value;label.append(check,document.createTextNode(' '+text));$(prefix+'Focus').append(label)}}
+async function refresh(){state=await api('/api/state');selectFill($('personalVideo'),state.videos.filter(v=>v.kind==='personal'),'选择已上传录像');selectFill($('referenceVideo'),state.videos.filter(v=>v.kind==='reference'),'选择录像或填写公开地址');selectFill($('caseSelect'),state.annotations.filter(a=>a.kind==='personal'),'选择已保存案例');const references=state.annotations.filter(a=>a.kind==='reference');selectFill($('referenceBrowse'),references,'选择已存职业候选');$('referenceBrowseCount').textContent=references.length+' 条已存记录，可逐条查看；尚未核对的记录保留候选状态。';if(!$('pConditions').children.length){buildFields('p');buildFields('r')}updateAnalysisSelection()}
+function conditions(prefix){return Object.fromEntries(Object.keys(state.labels).map(key=>[key,$(prefix+'_'+key).value]))}
+function focus(prefix){return [...$(prefix+'Focus').querySelectorAll('input:checked')].map(e=>e.value)}
+function youtubeId(url){try{const u=new URL(url);if(u.hostname==='youtu.be')return u.pathname.slice(1).split('/')[0];if(['www.youtube.com','youtube.com','m.youtube.com'].includes(u.hostname))return u.searchParams.get('v')||u.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1]}catch{}return null}
+function player(container,item){container.replaceChildren();if(item.video_id){const video=element('video');video.controls=true;video.preload='metadata';video.dataset.videoId=item.video_id;video.src='/media/'+encodeURIComponent(item.video_id);video.addEventListener('loadedmetadata',()=>{video.currentTime=item.start||0});video.addEventListener('timeupdate',()=>{if(item.end&&video.currentTime>=item.end&&!video.paused)video.pause()});video.addEventListener('error',()=>status('浏览器无法播放这个编码。可先导出 H.264 MP4，再导入。',true));container.append(video);return video}if(item.source_url){const id=youtubeId(item.source_url);if(id&&/^[A-Za-z0-9_-]{11}$/.test(id)){const frame=element('iframe');frame.title='职业示范视频';frame.allow='fullscreen; encrypted-media';frame.referrerPolicy='strict-origin-when-cross-origin';frame.src='https://www.youtube-nocookie.com/embed/'+id+'?start='+Math.floor(item.start)+'&end='+Math.ceil(item.end);container.append(frame)}else{container.append(element('div','此来源请在原网站观看；开始 '+item.start+' 秒，结束 '+item.end+' 秒。','placeholder'))}const a=element('a','打开原始来源');a.href=item.source_url;a.target='_blank';a.rel='noopener noreferrer';container.append(a);return null}container.append(element('div','导入录像后，在这里查看。','placeholder'))}
+async function upload(file,kind){if(!file)return;status('正在保存录像到本机…');const query=new URLSearchParams({name:file.name,kind});const res=await fetch('/api/upload?'+query,{method:'POST',headers:{'X-Session-Token':token,'Content-Type':'application/octet-stream'},body:file});const data=await res.json();if(!res.ok)throw new Error(data.error);await refresh();$(kind==='personal'?'personalVideo':'referenceVideo').value=data.id;if(kind==='personal'){player($('personalPlayer'),{video_id:data.id,start:0});resetAnalysisFrame();updateAnalysisSelection()}status('录像已保存在本机。请记录目标片段。')}
+function handler(id,event,fn){$(id).addEventListener(event,async()=>{const el=$(id);el.disabled=true;try{await fn()}catch(e){status(e.message,true)}finally{el.disabled=false}})}
+handler('personalFile','change',()=>upload($('personalFile').files[0],'personal'));handler('referenceFile','change',()=>upload($('referenceFile').files[0],'reference'));
+$('personalVideo').addEventListener('change',()=>{player($('personalPlayer'),{video_id:$('personalVideo').value,start:0});resetAnalysisFrame();updateAnalysisSelection()});
+handler('previewPersonal','click',()=>{if(!$('personalVideo').value)throw new Error('请先上传或选择个人录像');const start=Number($('pStart').value),end=Number($('pEnd').value);if(!(end>start&&start>=0))throw new Error('请填写正确的片段时间');const v=player($('personalPlayer'),{video_id:$('personalVideo').value,start,end});v.addEventListener('loadedmetadata',()=>v.play().catch(()=>{}),{once:true})});
+handler('savePersonal','click',async()=>{const data=await api('/api/annotations',{kind:'personal',target_player:$('pTarget').value,title:$('pTitle').value,video_id:$('personalVideo').value,start:Number($('pStart').value),end:Number($('pEnd').value),question:$('pQuestion').value,intent:$('pIntent').value,observation:$('pObservation').value,conditions:conditions('p'),focus:focus('p')});await refresh();$('caseSelect').value=data.id;status('个人案例已保存，可以添加示范后检索。')});
+handler('saveReference','click',async()=>{await api('/api/annotations',{kind:'reference',title:$('rTitle').value,video_id:$('referenceVideo').value,source_url:$('rUrl').value,start:Number($('rStart').value),end:Number($('rEnd').value),conditions:conditions('r'),focus:focus('r'),observation:$('rObservation').value,teaching_note:$('rTeaching').value,limits:$('rLimits').value,reviewed:$('rReviewed').checked,reviewer:$('rReviewer').value});await refresh();status('示范已保存。请核对条件与证据后用于研究。')});
+handler('viewStoredReference','click',()=>{
+  const reference=state?.annotations.find(item=>item.kind==='reference'&&item.id===$('referenceBrowse').value);if(!reference)throw new Error('请先选择已存职业候选');
+  $('referenceBrowsePlayer').className='';player($('referenceBrowsePlayer'),reference);
+  const panel=$('referenceBrowseDetails');panel.replaceChildren();panel.append(element('h3',reference.title),element('span',reference.reviewed?'标记为人工核对 · '+(reference.reviewer||'核对人待记录'):'候选 · 视频与适用性待核对','phase-badge'+(reference.reviewed?' confirmed':'')));
+  const metadata=reference.source_metadata||{},row=metadata.original_row||{},list=element('dl');list.className='reference-meta';
+  const originalPlayer=[metadata.player_name,metadata.original_player_code?'原代码 '+metadata.original_player_code:''].filter(Boolean).join(' · ');
+  for(const [name,value]of [['数据来源',metadata.dataset||reference.evidence_source],['原 time',metadata.original_time??row.time],['原 frame_num（未转换）',metadata.original_frame_num??row.frame_num],['原球员标签',originalPlayer||row.player],['原击球类型',row.type??metadata.stroke_mapping?.original],['展示区间',numberText(reference.start,2)+'–'+numberText(reference.end,2)+' 秒']])list.append(element('dt',name),element('dd',value===undefined||value===null||value===''?'待记录':String(value)));
+  panel.append(list,element('strong','作者标注或观察'),element('p',reference.observation||'尚未记录'),element('strong','适用边界与待核对项'),element('p',reference.limits||'适用性尚未核对'));
+  if(metadata.source_url){try{const url=new URL(metadata.source_url);if(['http:','https:'].includes(url.protocol)){const link=element('a','查看原标注来源');link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';panel.append(link)}}catch{}}
+  if(metadata.original_row){const detail=element('details');detail.append(element('summary','查看原始标注行'),element('pre',JSON.stringify(metadata.original_row,null,2)));panel.append(detail)}
+  panel.append(element('p','此处只读查看，不修改作者标注、核对状态或来源元数据。','muted'));
+});
+function labelFor(key){return {stroke:'击球类型',corner:'后场区域',incoming:'来球',arrival:'到位',balance:'平衡'}[key]}
+function compare(candidate){$('comparison').hidden=false;player($('comparePersonal'),lastResult.case);player($('compareReference'),candidate.reference);const panel=$('explanation');panel.replaceChildren();panel.append(element('h3','对照记录 · 基于人工标注'));const items=[['分析对象',({near:'近端球员',far:'远端球员',unconfirmed:'待确认'})[lastResult.case.target_player||'unconfirmed']],['你的观察',lastResult.case.observation||'尚未记录'],['你的意图',lastResult.case.intent||'尚未确认'],['示范证据',candidate.reference.observation||'尚未记录'],['可学习要点',candidate.reference.teaching_note||'尚未记录'],['适用边界',candidate.reference.limits||'尚未核对']];for(const [title,text]of items){panel.append(element('strong',title),element('p',text))}panel.append(element('p','以上内容来自标注，不是 AI 自动诊断。请结合不同条件和未知项判断是否适用。','muted'))}
+handler('search','click',async()=>{if(!$('caseSelect').value)throw new Error('请先保存并选择个人案例');lastResult=await api('/api/retrieve',{case_id:$('caseSelect').value});$('results').replaceChildren();$('comparison').hidden=true;$('explanation').replaceChildren();if(!lastResult.candidates.length){$('results').append(element('div','示范库还没有片段。先在右侧添加真实职业示范，再开始检索。','placeholder'));return}for(const candidate of lastResult.candidates){const box=element('div',undefined,'result');box.append(element('h3',candidate.reference.title),element('p','排序分 '+candidate.score+' · 已知条件覆盖 '+Math.round(candidate.coverage*100)+'% · '+candidate.status,'muted'));const chips=element('div',undefined,'chips');for(const key of candidate.matches)chips.append(element('span',labelFor(key)+'匹配','chip'));for(const key of candidate.differences)chips.append(element('span',labelFor(key)+'不同','chip warn'));for(const key of candidate.unknown)chips.append(element('span',labelFor(key)+'待确认','chip unknown'));box.append(chips);if(candidate.focus_matches.length)box.append(element('p','相关环节：'+candidate.focus_matches.map(k=>state.focus[k]).join('、'),'muted'));const button=element('button','查看并排对照');button.addEventListener('click',()=>{for(const el of document.querySelectorAll('.result'))el.classList.remove('selected');box.classList.add('selected');compare(candidate)});box.append(button);$('results').append(box)}status('已检索。请逐项核对，避免只根据分数选示范。')});
+handler('export','click',async()=>{const data=await api('/api/state');const blob=new Blob([JSON.stringify({...data,exported_at:new Date().toISOString()},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=element('a');a.href=url;a.download='羽毛球研究标注.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status('已导出标注；原录像保留在本机数据文件夹。')});
+function numberText(value,digits=0){return typeof value==='number'&&Number.isFinite(value)?value.toFixed(digits):'待确认'}
+function coverageText(value){return typeof value==='number'&&Number.isFinite(value)?numberText(100*value,1)+'%':'待确认'}
+function assignmentText(value){return {not_configured:'本次未设为分析对象',selected_by_manual_gate:'按人工区域与位置分配',no_candidate_in_manual_gate:'人工区域及身高条件内没有候选',candidate_too_far_from_anchor:'候选离参考位置过远',ambiguous_candidates:'多个候选位置接近，暂未分配'}[value]||value||'待确认'}
+function qualityFlagText(value){return {not_configured:'本次未设为分析对象',manual_gate:'使用人工区域分配',identity_not_frame_reviewed:'身份未逐帧核对',low_keypoint_score:'部分关节低于显示阈值',keypoint_out_of_frame:'部分关节点位于画面外',small_person_under_100px:'人物框高度不足 100 像素'}[value]||value}
+function poseSideConfigured(side,frame=null){
+  if(frame?.assignment?.[side]?.status==='not_configured')return false;
+  const summary=currentPose?.item.summary?.[side]||currentPose?.result.summary?.[side];if(summary?.configured===false||summary?.status==='not_configured')return false;
+  const config=currentPose?.result.player_config;if(config&&typeof config==='object'&&!Array.isArray(config))return Object.hasOwn(config,side);
+  return true;
+}
+function poseFrameSideLabel(frame,side){return poseSideConfigured(side,frame)?(frame.players?.[side]?'已分配':'未分配'):'本次未设为分析对象'}
+function nearestPoseFrame(time){
+  if(!poseFrames.length)return null;
+  let left=0,right=poseFrames.length-1;
+  while(left<right){const middle=Math.floor((left+right)/2);if(poseFrames[middle].source_time<time)left=middle+1;else right=middle}
+  const previous=poseFrames[Math.max(0,left-1)],next=poseFrames[left];
+  return Math.abs(previous.source_time-time)<Math.abs(next.source_time-time)?previous:next;
+}
+function frameEvidence(frame){
+  const panel=$('poseFrameDetail');panel.replaceChildren();
+  if(!frame){panel.append(element('p','这一结果没有可查看的逐帧记录。','muted'));return}
+  panel.append(element('p','原视频 '+numberText(frame.source_time,2)+' 秒 · 逐帧模型输出，待核对','muted'));
+  const grid=element('div',undefined,'grid');
+  for(const [side,label]of [['near','近端球员'],['far','远端球员']]){
+    const box=element('div',undefined,'pose-stat'),person=frame.players?.[side];box.append(element('h3',label));
+    if(!poseSideConfigured(side,frame)){box.append(element('p','本次未设为分析对象。该侧未请求姿态估计，不计作漏检。','muted'));grid.append(box);continue}
+    const assignment=frame.assignment?.[side];
+    box.append(element('p','分配状态：'+assignmentText(assignment?.status)+' · 候选 '+numberText(assignment?.candidate_count)+' 个','muted'));
+    if(!person){box.append(element('p','本帧未分配检测结果；不能据此判断球员不在场。','muted'))}
+    else{
+      const points=Array.isArray(person.keypoints)?person.keypoints:[],scores=points.map(p=>p.score).filter(s=>typeof s==='number'&&Number.isFinite(s));
+      box.append(element('p','关节点 '+points.length+' 个 · 有分数 '+scores.length+' 个','muted'));
+      const inFrame=points.filter(p=>p.in_frame===true).length,outOfFrame=points.filter(p=>p.in_frame===false).length,unknown=points.length-inFrame-outOfFrame;
+      box.append(element('p','画面内 '+inFrame+' 个 · 画面外 '+outOfFrame+' 个 · 位置状态待确认 '+unknown+' 个','muted'));
+      if(!scores.length)box.append(element('p','模型关节分数：待确认','muted'));
+      const flags=Array.isArray(person.quality_flags)?person.quality_flags:[],chips=element('div',undefined,'chips');
+      if(flags.length){for(const flag of flags){const chip=element('span',qualityFlagText(flag),'chip warn');chip.title=flag;chips.append(chip)}}else chips.append(element('span','质量标记：待确认','chip unknown'));
+      box.append(chips);
+      if(points.length){const details=element('details');details.append(element('summary','查看关节点与画面状态'),element('p','in_frame 为 true 表示坐标在原画面范围内，仍需结合视频核对；false 表示画面外。','muted'),element('pre',JSON.stringify(points,null,2)));box.append(details)}
+      if(person.features&&typeof person.features==='object'&&Object.keys(person.features).length){
+        const detail=element('details');detail.append(element('summary','查看计算特征（待核对）'),element('pre',JSON.stringify(person.features,null,2)));box.append(detail);
+      }
+    }
+    grid.append(box);
+  }
+  panel.append(grid);
+}
+function seekPoseVideo(video,time){
+  if(!video||!Number.isFinite(time))return;
+  const seek=()=>{video.pause();video.currentTime=Math.max(0,Math.min(time,Number.isFinite(video.duration)?video.duration:time))};
+  if(video.readyState>=1)seek();else video.addEventListener('loadedmetadata',seek,{once:true});
+}
+function jumpPoseFrame(sourceTime){
+  if(!currentPose)return;
+  seekPoseVideo(poseOverlay,sourceTime-Number(currentPose.item.start||0));seekPoseVideo(poseSource,sourceTime);
+  $('poseTime').textContent='原视频时刻：'+numberText(sourceTime,2)+' 秒';frameEvidence(nearestPoseFrame(sourceTime));
+}
+function poseSummary(item){
+  const container=$('poseStats');container.replaceChildren();
+  for(const [side,label]of [['near','近端球员'],['far','远端球员']]){
+    const summary=item.summary?.[side]||{},box=element('div',undefined,'pose-stat'),list=element('dl');box.append(element('h3',label));
+    if(!poseSideConfigured(side)){box.append(element('p','本次未设为分析对象。可在原视频中人工观察，该侧不显示检测覆盖。','muted'));container.append(box);continue}
+    const assigned=summary.assigned_frames,total=summary.total_frames;
+    const coverage=typeof assigned==='number'&&typeof total==='number'&&total>0?numberText(100*assigned/total,1)+'%':'待确认';
+    for(const [name,value]of [['检测覆盖',coverage],['已分配 / 抽样帧',numberText(assigned)+' / '+numberText(total)],['肩、髋、踝达显示阈值的帧',numberText(summary.usable_frames)],['关节分数中位数',numberText(summary.median_joint_score,3)]]){
+      list.append(element('dt',name),element('dd',value));
+    }
+    box.append(list,element('h3','关节组覆盖'));
+    const groups=element('dl');
+    for(const [key,name]of [['shoulders','肩'],['elbows','肘'],['wrists','腕'],['hips','髋'],['knees','膝'],['ankles','踝']])groups.append(element('dt',name),element('dd',coverageText(summary.joint_group_coverage?.[key])));
+    box.append(groups);container.append(box);
+  }
+}
+async function loadPose(id){
+  const request=++poseRequest,item=poseIndex.find(p=>p.id===id);currentPose=null;poseFrames=[];
+  cachePhaseDraft();phaseLoading++;phaseDocument=null;phasePlayers=null;phaseSelected=null;phaseDirty=false;
+  $('phaseSides').replaceChildren();$('phaseEditor').hidden=true;$('exportPhases').disabled=true;$('savePhasePlayers').disabled=true;$('phaseStatus').textContent='';$('phaseQualityNote').textContent='';
+  $('downloadPose').disabled=true;$('poseView').hidden=true;$('poseEmpty').hidden=false;
+  $('poseOverlay').replaceChildren();$('poseSource').replaceChildren();poseOverlay=null;poseSource=null;
+  if(!item){$('poseEmpty').textContent=poseIndex.length?'请选择一个姿态结果。':'尚无姿态分析结果。离线处理完成后，可在这里查看。';return}
+  $('poseEmpty').textContent='正在读取姿态与时间戳…';
+  let result;try{result=await api('/api/pose/'+encodeURIComponent(id))}catch(error){if(request===poseRequest)$('poseEmpty').textContent=error.message;return}
+  if(request!==poseRequest)return;
+  currentPose={item,result};poseFrames=(result.frames||[]).filter(f=>f&&typeof f.source_time==='number'&&Number.isFinite(f.source_time)).sort((a,b)=>a.source_time-b.source_time);
+  $('poseEmpty').hidden=true;$('poseView').hidden=false;$('downloadPose').disabled=false;
+  $('poseMeta').replaceChildren();
+  for(const text of ['来源区间 '+numberText(item.start,2)+'–'+numberText(item.end,2)+' 秒','抽样频率 '+numberText(item.sample_fps,2)+' fps','逐帧记录 '+poseFrames.length+' 条','显示阈值 '+numberText(result.display_threshold,2),'本次处理耗时 '+numberText(result.runtime_seconds??item.runtime_seconds,3)+' 秒'])$('poseMeta').append(element('span',text));
+  $('poseQuality').textContent=item.quality_note||'模型输出待核对。请结合原视频检查漏检、遮挡和近端 / 远端分配；尚未完成动作诊断。';poseSummary(item);
+  poseOverlay=player($('poseOverlay'),{video_id:item.overlay_video_id,start:0,end:Number(item.end)-Number(item.start)});
+  poseSource=player($('poseSource'),{video_id:item.source_video_id,start:Number(item.start),end:Number(item.end)});
+  const options=$('poseFrame');options.replaceChildren();
+  const cap=600,selected=poseFrames.length<=cap?poseFrames:Array.from({length:cap},(_,i)=>poseFrames[Math.round(i*(poseFrames.length-1)/(cap-1))]);
+  for(const frame of selected){const option=element('option',numberText(frame.source_time,2)+' 秒 · 近端 '+poseFrameSideLabel(frame,'near')+' / 远端 '+poseFrameSideLabel(frame,'far'));option.value=String(frame.source_time);options.append(option)}
+  options.disabled=!selected.length;
+  $('poseFrameNote').textContent=poseFrames.length>cap?'列表等距展示 600 个时间点；播放时查看邻近帧，完整数据可下载。':'列表列出全部抽样时间点；选择后跳转原视频和叠加片段。';
+  const initial=poseFrames[0]?.source_time??Number(item.start||0);$('poseTime').textContent='原视频时刻：'+numberText(initial,2)+' 秒';frameEvidence(poseFrames[0]);
+  if(poseOverlay){let previousTime=-Infinity;poseOverlay.addEventListener('timeupdate',()=>{
+    const sourceTime=poseOverlay.currentTime+Number(item.start||0);$('poseTime').textContent='原视频时刻：'+numberText(sourceTime,2)+' 秒';
+    if(Math.abs(sourceTime-previousTime)<0.2)return;previousTime=sourceTime;frameEvidence(nearestPoseFrame(sourceTime));
+  })}
+  await loadPhaseReview(item.id);
+}
+function phaseLabel(key){return phaseDocument?.phase_labels?.[key]||key||'待分类'}
+function phaseStateLabel(key){return {candidate:'候选 · 待人工核对',confirmed:'人工确认',rejected:'人工排除'}[key]||'候选 · 待人工核对'}
+function phaseSelectOptions(select,options,value){select.replaceChildren();for(const [key,label]of Object.entries(options)){const option=element('option',label);option.value=key;select.append(option)}select.value=value}
+function phaseNoteParts(note){
+  const text=typeof note==='string'?note:'',match=text.match(/^阶段含义：[ \t]*(?:\n)?([\s\S]*?)\n(?:\n)?质量观察：[ \t]*(?:\n)?([\s\S]*)$/);
+  if(match)return {meaning:match[1],quality:match[2]};
+  return {meaning:text,quality:''};
+}
+function phaseNote(meaning,quality){return quality?'阶段含义：\n'+meaning+'\n\n质量观察：\n'+quality:meaning}
+function cachePhaseDraft(){if(phaseDocument&&phasePlayers)phaseDraftCache.set(phaseDocument.pose_id,{document:phaseDocument,players:phasePlayers,dirty:phaseDirty})}
+function markPhaseDirty(){phaseDirty=true;cachePhaseDraft();$('phaseDirty').textContent='有未保存修改';$('phaseStatus').textContent='本地草稿 · 尚未保存';$('discardPhaseDraft').hidden=false}
+function phaseOriginText(origin){
+  if(!origin)return '人工新增的草稿，尚未核对';
+  const text=typeof origin==='string'?origin:JSON.stringify(origin);
+  if(/assistant/i.test(text))return '助手采样观察提出的候选，需要人工核对';
+  if(/model|ai_/i.test(text))return '模型提出的候选，需要人工核对';
+  if(/manual|human/i.test(text))return '人工记录，核对状态见上方';
+  if(/dataset|shuttleset/i.test(text))return '作者数据集标注，需要结合录像核对';
+  return '候选来源保留在导出的完整记录中';
+}
+function renderPhaseLists(){
+  if(!phasePlayers)return;
+  for(const side of ['near','far']){
+    const list=$('phaseList_'+side);if(!list)continue;list.replaceChildren();const phases=phasePlayers[side].phases;
+    if(!phases.length)list.append(element('p','没有阶段记录，可从当前画面新增候选。','muted'));
+    for(const phase of phases){
+      const box=element('div',undefined,'phase-item'+(phaseSelected?.phase===phase?' selected':''));box.append(element('h4',(phase.event_id?phase.event_id+' / ':'')+phaseLabel(phase.label)+' · '+numberText(phase.start,2)+'–'+numberText(phase.end,2)+' 秒'));
+      box.append(element('span',phaseStateLabel(phase.status),'phase-badge'+(phase.status==='confirmed'?' confirmed':phase.status==='rejected'?' rejected':'')));
+      box.append(element('p',phaseOriginText(phase.origin),'muted'));
+      const button=element('button','查看并校正','secondary');button.addEventListener('click',()=>{selectPhase(side,phase);jumpPoseFrame(Number(phase.start))});box.append(button);list.append(box);
+    }
+    const overlaps=[];
+    for(let i=0;i<phases.length;i++)for(let j=i+1;j<phases.length;j++)if(phases[i].status!=='rejected'&&phases[j].status!=='rejected'&&phases[i].start<phases[j].end&&phases[j].start<phases[i].end)overlaps.push(phaseLabel(phases[i].label)+' / '+phaseLabel(phases[j].label));
+    if(overlaps.length)list.append(element('p','时间重叠提示：'+overlaps.slice(0,8).join('；')+'。重叠允许，请人工判断是否合理。','muted'));
+  }
+}
+function selectPhase(side,phase){
+  phaseSelected={side,phase};$('phaseEditor').hidden=false;$('phaseEditorTitle').textContent=(side==='near'?'近端':'远端')+'球员 · 校正阶段';
+  const note=phaseNoteParts(phase.note);$('phaseEventId').value=phase.event_id||'';$('phaseStart').value=phase.start;$('phaseEnd').value=phase.end;$('phaseMeaning').value=note.meaning;$('phaseQuality').value=note.quality;$('phaseReviewer').value=phase.reviewer||'';
+  phaseSelectOptions($('phaseKind'),phaseDocument.phase_labels,phase.label);
+  phaseSelectOptions($('phaseReviewState'),{candidate:'候选 · 待人工核对',confirmed:'人工确认',rejected:'人工排除'},phase.status||'candidate');
+  const evidence=Array.isArray(phase.evidence_times)?' · 候选采样依据：'+phase.evidence_times.map(time=>numberText(time,2)+' 秒').join('、'):'';
+  const boundary=phase.boundary_status==='coarse_candidate'?' · 边界为粗略观察窗口':phase.boundary_status==='manual_interval_review'?' · 边界经人工窗口核对':phase.boundary_status?' · 边界状态保留在完整记录中':'';
+  const contact=phase.contact_status==='unverified'?' · 触球未确认':phase.contact_status?' · 触球状态：'+phase.contact_status:'';
+  $('phaseProvenance').textContent=phaseOriginText(phase.origin)+evidence+boundary+contact;$('phaseDirty').textContent=phaseDirty?'有未保存修改':'';renderPhaseLists();
+}
+function updateSelectedPhase(){
+  if(!phaseSelected)return;const phase=phaseSelected.phase;
+  const originalNote=phaseNoteParts(phase.note),meaning=$('phaseMeaning').value,quality=$('phaseQuality').value;
+  const next={event_id:$('phaseEventId').value.trim(),start:Number.parseFloat($('phaseStart').value),end:Number.parseFloat($('phaseEnd').value),label:$('phaseKind').value,note:meaning===originalNote.meaning&&quality===originalNote.quality?(phase.note||''):phaseNote(meaning,quality)};
+  const changed=Object.entries(next).some(([key,value])=>(key==='event_id'?(phase[key]||''):phase[key])!==value),downgraded=changed&&['confirmed','rejected'].includes(phase.status);
+  Object.assign(phase,next);phase.reviewer=$('phaseReviewer').value;
+  if(changed){phase.reconfirm=false;if(downgraded){phase.status='candidate';$('phaseReviewState').value='candidate'}}
+  markPhaseDirty();if(downgraded)$('phaseDirty').textContent='内容已变更，已回到候选；请核对后重新确认。';renderPhaseLists();
+}
+function addPhase(side){
+  if(!phaseDocument||!currentPose)return;
+  const step=1/(Number(phaseDocument.sample_fps)||10),now=poseOverlay?poseOverlay.currentTime+Number(currentPose.item.start):Number(phaseDocument.start);
+  const start=Math.max(Number(phaseDocument.start),Math.min(now,Number(phaseDocument.end)-step));
+  const phase={id:'',event_id:'',label:'unknown',start:Number(start.toFixed(3)),end:Number(Math.min(start+0.5,Number(phaseDocument.end)).toFixed(3)),status:'candidate',note:'',reviewer:''};
+  phasePlayers[side].phases.push(phase);markPhaseDirty();selectPhase(side,phase);
+}
+function renderPhaseSides(){
+  const container=$('phaseSides');container.replaceChildren();
+  for(const [side,name]of [['near','近端球员'],['far','远端球员']]){
+    const person=phasePlayers[side],box=element('div',undefined,'phase-side');box.append(element('h3',name));
+    if(!poseSideConfigured(side))box.append(element('p','本次未设为分析对象；仍可依据原视频填写人工阶段观察。','muted'));
+    const fields=[['racket_hand','持拍手（需人工确认）',{unknown:'待确认',left:'左手（人工填写）',right:'右手（人工填写）'}],['identity_status','画面中的球员身份核对',{unreviewed:'未核对',confirmed:'人工确认',uncertain:'身份不确定'}]];
+    for(const [key,label,options]of fields){const wrapper=element('label',label),select=element('select');phaseSelectOptions(select,options,person[key]);select.addEventListener('change',()=>{person[key]=select.value;markPhaseDirty()});wrapper.append(select);box.append(wrapper)}
+    const reviewerLabel=element('label','球员记录核对人'),reviewer=element('input');reviewer.value=person.reviewer||'';reviewer.placeholder='身份确认或阶段确认时填写姓名 / 研究编号';reviewer.addEventListener('input',()=>{person.reviewer=reviewer.value;markPhaseDirty()});reviewerLabel.append(reviewer);box.append(reviewerLabel);
+    const noteLabel=element('label','身份、画面质量与其他观察'),notes=element('textarea');notes.value=person.notes||'';notes.addEventListener('input',()=>{person.notes=notes.value;markPhaseDirty()});noteLabel.append(notes);box.append(noteLabel);
+    box.append(element('p','左右腕图像特征不能确定持拍手。持拍手和身份由人工核对。','muted'));
+    const add=element('button','从当前画面新增阶段候选','secondary');add.addEventListener('click',()=>addPhase(side));box.append(add);
+    const list=element('div',undefined,'phase-list');list.id='phaseList_'+side;box.append(list);
+    const signals=phaseDocument.signals?.[side]||[];box.append(element('h3','骨架图像信号 · 供核对'));
+    if(!signals.length)box.append(element('p','没有可展示的信号区间。','muted'));
+    for(const signal of signals){
+      const item=element('div',undefined,'phase-item'),joint=signal.joint_side==='left'?'左腕':signal.joint_side==='right'?'右腕':'腕';
+      item.append(element('p',(signal.kind==='wrist_above_shoulder'?joint+'高于同侧肩的图像区间':signal.kind)+' · '+numberText(signal.start,2)+'–'+numberText(signal.end,2)+' 秒'));
+      item.append(element('p','峰值 '+numberText(signal.peak_value,3)+' · 已知帧 '+numberText(signal.known_frames)+' · 特征阈值 '+numberText(signal.threshold,3),'muted'));
+      const jump=element('button','查看峰值 '+numberText(signal.peak_time,2)+' 秒','secondary');jump.disabled=typeof signal.peak_time!=='number';jump.addEventListener('click',()=>jumpPoseFrame(signal.peak_time));item.append(jump);box.append(item);
+    }
+    box.append(element('p','图像信号不等于击球事件，不会自动生成或确认动作阶段。','muted'));container.append(box);
+  }
+  renderPhaseLists();
+}
+async function loadPhaseReview(poseId,fresh=false){
+  const request=++phaseLoading;$('phaseStatus').textContent='正在读取阶段记录…';
+  let document;try{document=await api('/api/phase-review/'+encodeURIComponent(poseId))}catch(error){if(request===phaseLoading)$('phaseStatus').textContent='阶段记录暂不可读取：'+error.message;return}
+  if(request!==phaseLoading||currentPose?.item.id!==poseId)return;
+  const cached=fresh?null:phaseDraftCache.get(poseId);
+  if(cached?.dirty){
+    const poseChanged=cached.document.pose_created_at!==document.pose_created_at;
+    phaseDocument={...cached.document,signals:document.signals,pose_created_at:document.pose_created_at,quality_note:document.quality_note};phasePlayers=cached.players;phaseDirty=true;
+    $('phaseStatus').textContent=poseChanged?'姿态结果已更新，图像信号已刷新；已保留旧阶段草稿，需重新核对并处理版本冲突。':'已保留此片段的未保存草稿；保存时会检查版本冲突。';
+  }
+  else{phaseDocument=document;phasePlayers=JSON.parse(JSON.stringify(document.players));for(const person of Object.values(phasePlayers))for(const phase of person.phases)phase.reconfirm=false;phaseDirty=false;$('phaseStatus').textContent='已载入阶段记录'}
+  phaseSelected=null;$('phaseEditor').hidden=true;$('phaseDirty').textContent='';$('discardPhaseDraft').hidden=!phaseDirty;
+  $('phaseQualityNote').textContent=phaseDocument.quality_note||'阶段候选需要人工核对，不能据此确定触球时刻或技术错误。';
+  $('savePhasePlayers').disabled=false;$('exportPhases').disabled=false;renderPhaseSides();cachePhaseDraft();
+}
+function phasePayload(){
+  const players={};
+  for(const side of ['near','far']){
+    const person=phasePlayers[side];
+    players[side]={racket_hand:person.racket_hand,identity_status:person.identity_status,notes:person.notes||'',reviewer:(person.reviewer||'').trim(),phases:person.phases.map(phase=>({id:phase.id||'',event_id:phase.event_id||'',label:phase.label,start:phase.start,end:phase.end,status:phase.status||'candidate',note:phase.note||'',reviewer:(phase.reviewer||'').trim(),reconfirm:phase.reconfirm===true}))};
+  }
+  return {revision:phaseDocument.revision,players};
+}
+async function savePhaseReview(){
+  if(!phaseDocument||!phasePlayers)throw new Error('请先选择姿态结果并读取阶段记录');if(phaseSaving)return;
+  const payload=phasePayload(),poseId=phaseDocument.pose_id;
+  for(const [side,person]of Object.entries(payload.players)){
+    const name=side==='near'?'近端':'远端';if(person.identity_status==='confirmed'&&!person.reviewer)throw new Error(name+'球员身份确认需要填写核对人');
+    if(['left','right'].includes(person.racket_hand)&&!person.reviewer)throw new Error(name+'球员持拍手确认需要填写核对人');
+    for(const phase of person.phases){
+      if(!Number.isFinite(phase.start)||!Number.isFinite(phase.end)||phase.start<phaseDocument.start||phase.end>phaseDocument.end||phase.start>=phase.end)throw new Error(name+'阶段起止时间须位于片段内，结束大于开始');
+      if(['confirmed','rejected'].includes(phase.status)&&!phase.reviewer&&!person.reviewer)throw new Error(name+'阶段人工确认或排除需要填写核对人');
+    }
+  }
+  phaseSaving=true;$('phasePanel').inert=true;$('phaseStatus').textContent='正在保存阶段记录…';
+  try{
+    const response=await fetch('/api/phase-review/'+encodeURIComponent(poseId),{method:'POST',headers:{'Content-Type':'application/json','X-Session-Token':token},body:JSON.stringify(payload)}),saved=await response.json();
+    if(!response.ok){if(response.status===409)throw new Error('保存冲突：服务器记录已更新。本地草稿已保留，请先导出，再选择放弃草稿并读取最新版本。');throw new Error(saved.error||'阶段记录保存失败')}
+    const savedPlayers=JSON.parse(JSON.stringify(saved.players));for(const person of Object.values(savedPlayers))for(const phase of person.phases)phase.reconfirm=false;
+    phaseDraftCache.set(poseId,{document:saved,players:savedPlayers,dirty:false});
+    if(currentPose?.item.id===poseId){phaseDocument=saved;phasePlayers=savedPlayers;phaseSelected=null;phaseDirty=false;$('phaseEditor').hidden=true;$('phaseDirty').textContent='';$('discardPhaseDraft').hidden=true;$('phaseStatus').textContent='已保存阶段记录';renderPhaseSides()}
+    status('阶段记录已保存；候选与人工确认状态按你的记录保留。');
+  }catch(error){cachePhaseDraft();if(currentPose?.item.id===poseId)$('phaseStatus').textContent=error.message;throw error}
+  finally{phaseSaving=false;$('phasePanel').inert=false}
+}
+for(const id of ['phaseEventId','phaseStart','phaseEnd','phaseMeaning','phaseQuality','phaseReviewer'])$(id).addEventListener('input',updateSelectedPhase);
+$('phaseKind').addEventListener('change',updateSelectedPhase);
+$('phaseReviewState').addEventListener('change',()=>{if(!phaseSelected)return;const phase=phaseSelected.phase;phase.status=$('phaseReviewState').value;phase.reconfirm=['confirmed','rejected'].includes(phase.status);markPhaseDirty();renderPhaseLists()});
+window.addEventListener('beforeunload',event=>{if(phaseDirty||[...phaseDraftCache.values()].some(draft=>draft.dirty)){event.preventDefault();event.returnValue=''}});
+handler('phaseStartFromVideo','click',()=>{if(!phaseSelected||!currentPose)return;$('phaseStart').value=numberText((poseOverlay?.currentTime||0)+Number(currentPose.item.start),3);updateSelectedPhase()});
+handler('phaseEndFromVideo','click',()=>{if(!phaseSelected||!currentPose)return;$('phaseEnd').value=numberText((poseOverlay?.currentTime||0)+Number(currentPose.item.start),3);updateSelectedPhase()});
+handler('phaseJump','click',()=>{if(phaseSelected)jumpPoseFrame(Number($('phaseStart').value))});
+handler('savePhase','click',savePhaseReview);handler('savePhasePlayers','click',savePhaseReview);
+handler('reloadPhases','click',async()=>{if(!currentPose)throw new Error('请先选择姿态结果');cachePhaseDraft();await loadPhaseReview(currentPose.item.id)});
+handler('discardPhaseDraft','click',async()=>{if(!currentPose)return;await loadPhaseReview(currentPose.item.id,true)});
+handler('exportPhases','click',()=>{
+  if(!phaseDocument||!phasePlayers)throw new Error('请先读取阶段记录');
+  const data={...phaseDocument,players:phasePlayers,exported_at:new Date().toISOString(),export_state:phaseDirty?'unsaved_draft':'saved_record'},blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=element('a');link.href=url;link.download='动作阶段_'+phaseDocument.pose_id+(phaseDirty?'_未保存草稿':'')+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status('已导出阶段记录，文件保留候选来源和核对状态。');
+});
+function updateAnalysisSelection(){
+  const id=$('personalVideo').value,video=state?.videos.find(item=>item.id===id),start=Number.parseFloat($('pStart').value),end=Number.parseFloat($('pEnd').value);
+  $('analysisSelection').textContent=video?video.name+' · '+numberText(start,2)+'–'+numberText(end,2)+' 秒 · 片段 '+numberText(end-start,2)+' 秒':'请在“记录个人问题”中上传或选择个人录像，并设置起止时间。';
+}
+function clearAnalysisRegions(){
+  for(const side of ['near','far'])analysisRegions[side]={foot_gate:null,anchor:null,anchor_time:null};analysisDrag=null;
+  $('analysisUseNear').checked=true;$('analysisUseFar').checked=false;$('analysisSide').value='near';$('analysisDrawMode').value='region';renderAnalysisConfig();drawAnalysisCanvas();
+}
+function resetAnalysisFrame(){analysisFrame=null;analysisDrag=null;$('analysisCanvas').hidden=true;$('analysisCanvasEmpty').hidden=false;$('analysisFrameInfo').textContent='';clearAnalysisRegions()}
+function enabledAnalysisSide(side){return $(side==='near'?'analysisUseNear':'analysisUseFar').checked}
+function renderAnalysisConfig(){
+  const container=$('analysisRegionConfig');container.replaceChildren();
+  for(const [side,label]of [['near','近端 · 青蓝色'],['far','远端 · 橙色']]){
+    const config=analysisRegions[side],box=element('div',undefined,'analysis-region-config');box.append(element('h4',label,'analysis-color-'+side));
+    box.append(element('p',enabledAnalysisSide(side)?'已选择分析':'未选择分析','muted'));
+    box.append(element('p','脚部区域：'+(config.foot_gate?config.foot_gate.map(value=>value.toFixed(3)).join('，'):'尚未框选')));
+    box.append(element('p','起始锚点：'+(config.anchor?config.anchor.map(value=>value.toFixed(3)).join('，')+' · 取自 '+numberText(config.anchor_time,2)+' 秒':'尚未点选')));container.append(box);
+  }
+}
+function drawAnalysisCanvas(){
+  if(!analysisFrame)return;const canvas=$('analysisCanvas'),context=canvas.getContext('2d');context.clearRect(0,0,canvas.width,canvas.height);context.drawImage(analysisFrame.image,0,0);
+  const scale=Math.max(1,canvas.width/960);
+  for(const side of ['near','far']){
+    const config=analysisRegions[side],color=side==='near'?'#24b6e2':'#f7a943',gate=config.foot_gate;context.save();context.globalAlpha=enabledAnalysisSide(side)?1:0.4;context.strokeStyle=color;context.fillStyle=color;context.lineWidth=3*scale;context.font=Math.round(17*scale)+'px sans-serif';
+    if(gate){const [x1,y1,x2,y2]=gate;context.globalAlpha*=0.12;context.fillRect(x1*canvas.width,y1*canvas.height,(x2-x1)*canvas.width,(y2-y1)*canvas.height);context.globalAlpha=enabledAnalysisSide(side)?1:0.4;context.strokeRect(x1*canvas.width,y1*canvas.height,(x2-x1)*canvas.width,(y2-y1)*canvas.height);context.fillText(side==='near'?'近端脚部移动区域':'远端脚部移动区域',x1*canvas.width+6*scale,Math.max(22*scale,y1*canvas.height-6*scale))}
+    if(config.anchor){const x=config.anchor[0]*canvas.width,y=config.anchor[1]*canvas.height;context.beginPath();context.arc(x,y,7*scale,0,Math.PI*2);context.stroke();context.beginPath();context.moveTo(x-12*scale,y);context.lineTo(x+12*scale,y);context.moveTo(x,y-12*scale);context.lineTo(x,y+12*scale);context.stroke()}
+    context.restore();
+  }
+  if(analysisDrag){const a=analysisDrag.start,b=analysisDrag.end;context.save();context.strokeStyle=analysisDrag.side==='near'?'#24b6e2':'#f7a943';context.lineWidth=3*scale;context.setLineDash([6*scale,4*scale]);context.strokeRect(a[0]*canvas.width,a[1]*canvas.height,(b[0]-a[0])*canvas.width,(b[1]-a[1])*canvas.height);context.restore()}
+}
+function analysisCanvasPoint(event){const box=$('analysisCanvas').getBoundingClientRect();return [Math.max(0,Math.min(1,(event.clientX-box.left)/box.width)),Math.max(0,Math.min(1,(event.clientY-box.top)/box.height))]}
+function pointInsideGate(point,gate){return gate&&point[0]>=gate[0]&&point[0]<=gate[2]&&point[1]>=gate[1]&&point[1]<=gate[3]}
+$('analysisCanvas').addEventListener('pointerdown',event=>{
+  if(!analysisFrame||event.button!==0)return;event.preventDefault();const side=$('analysisSide').value,point=analysisCanvasPoint(event),config=analysisRegions[side];
+  $(side==='near'?'analysisUseNear':'analysisUseFar').checked=true;
+  if($('analysisDrawMode').value==='anchor'){
+    if(!pointInsideGate(point,config.foot_gate)){status('请先框选脚部移动区域，再在该区域内点选锚点。',true);renderAnalysisConfig();return}
+    if(Math.abs(analysisFrame.time-Number.parseFloat($('pStart').value))>0.15){status('请先跳到片段开始并取画面，再点选起始脚部锚点。',true);return}
+    config.anchor=point;config.anchor_time=analysisFrame.time;renderAnalysisConfig();drawAnalysisCanvas();$('analysisFrameInfo').textContent='已记录'+(side==='near'?'近端':'远端')+'起始脚部锚点。';return;
+  }
+  analysisDrag={side,start:point,end:point,pointerId:event.pointerId};$('analysisCanvas').setPointerCapture(event.pointerId);drawAnalysisCanvas();
+});
+$('analysisCanvas').addEventListener('pointermove',event=>{if(analysisDrag&&analysisDrag.pointerId===event.pointerId){analysisDrag.end=analysisCanvasPoint(event);drawAnalysisCanvas()}});
+$('analysisCanvas').addEventListener('pointerup',event=>{
+  if(!analysisDrag||analysisDrag.pointerId!==event.pointerId)return;const drag=analysisDrag,a=drag.start,b=analysisCanvasPoint(event);analysisDrag=null;
+  const gate=[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])];
+  if(gate[2]-gate[0]<0.01||gate[3]-gate[1]<0.01){status('区域太小，请拖出覆盖整个片段脚部移动的矩形。',true);drawAnalysisCanvas();return}
+  const config=analysisRegions[drag.side];config.foot_gate=gate;if(config.anchor&&!pointInsideGate(config.anchor,gate)){config.anchor=null;config.anchor_time=null}
+  $('analysisDrawMode').value='anchor';$('analysisFrameInfo').textContent='区域已记录。请在起始画面点选'+(drag.side==='near'?'近端':'远端')+'球员脚部锚点，或继续调整区域。';renderAnalysisConfig();drawAnalysisCanvas();
+});
+$('analysisCanvas').addEventListener('pointercancel',()=>{analysisDrag=null;drawAnalysisCanvas()});
+function waitVideoEvent(video,eventName,ready){
+  if(ready?.())return Promise.resolve();return new Promise((resolve,reject)=>{
+    let timer;const cleanup=()=>{clearTimeout(timer);video.removeEventListener(eventName,done);video.removeEventListener('error',fail)},done=()=>{cleanup();resolve()},fail=()=>{cleanup();reject(new Error('本地视频暂时无法解码，请检查浏览器播放或改用 H.264 MP4。'))};
+    video.addEventListener(eventName,done,{once:true});video.addEventListener('error',fail,{once:true});timer=setTimeout(()=>{cleanup();reject(new Error('等待视频画面超时，请先在上方播放器播放一下，再取画面。'))},12000);
+  });
+}
+async function captureAnalysisFrame(atStart){
+  if(analysisCaptureBusy)throw new Error('正在读取画面，请稍候');const videoId=$('personalVideo').value;if(!videoId)throw new Error('请先上传或选择个人录像');
+  analysisCaptureBusy=true;try{
+    let video=$('personalPlayer').querySelector('video');if(!video||video.dataset.videoId!==videoId)video=player($('personalPlayer'),{video_id:videoId,start:0});
+    await waitVideoEvent(video,'loadedmetadata',()=>video.readyState>=1);video.pause();
+    if(atStart){const start=Number.parseFloat($('pStart').value);if(!Number.isFinite(start)||start<0||start>=video.duration)throw new Error('片段开始时间须在视频时长内');if(Math.abs(video.currentTime-start)>0.02){const seek=waitVideoEvent(video,'seeked');video.currentTime=start;await seek}}
+    await waitVideoEvent(video,'loadeddata',()=>video.readyState>=2);if($('personalVideo').value!==videoId)throw new Error('录像已切换，请重新取画面');
+    const image=document.createElement('canvas');image.width=video.videoWidth;image.height=video.videoHeight;if(!image.width||!image.height)throw new Error('尚未读取到视频画面');image.getContext('2d').drawImage(video,0,0,image.width,image.height);
+    if(analysisFrame&&analysisFrame.video_id!==videoId)clearAnalysisRegions();analysisFrame={video_id:videoId,time:video.currentTime,image,duration:video.duration};
+    const canvas=$('analysisCanvas');canvas.width=image.width;canvas.height=image.height;canvas.hidden=false;$('analysisCanvasEmpty').hidden=true;
+    $('analysisFrameInfo').textContent='原视频 '+numberText(analysisFrame.time,2)+' 秒 · '+image.width+' × '+image.height+' · 画面在本机读取，未上传。';drawAnalysisCanvas();renderAnalysisConfig();updateAnalysisSelection();
+  }finally{analysisCaptureBusy=false}
+}
+function analysisRequest(){
+  const videoId=$('personalVideo').value,start=Number.parseFloat($('pStart').value),end=Number.parseFloat($('pEnd').value);
+  if(!videoId)throw new Error('请先上传或选择个人录像');if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end-start>30)throw new Error('请选择大于 0 且不超过 30 秒的片段');
+  if(!analysisFrame||analysisFrame.video_id!==videoId)throw new Error('请先从当前录像取画面并指定球员区域');if(end>analysisFrame.duration+0.02)throw new Error('片段结束时间超过原视频时长');
+  const players={};for(const side of ['near','far'])if(enabledAnalysisSide(side)){
+    const config=analysisRegions[side],name=side==='near'?'近端':'远端';if(!config.foot_gate||!config.anchor)throw new Error('请框选'+name+'脚部移动区域并点选起始锚点');
+    if(!pointInsideGate(config.anchor,config.foot_gate))throw new Error(name+'起始锚点须在区域内');if(Math.abs(config.anchor_time-start)>0.15)throw new Error(name+'锚点对应的片段开始时间已变化，请重新取起始画面并点选');
+    players[side]={foot_gate:config.foot_gate,anchor:config.anchor};
+  }
+  if(!Object.keys(players).length)throw new Error('请至少选择一侧球员');
+  const video=state?.videos.find(item=>item.id===videoId);return {video_id:videoId,start,end,label:$('analysisLabel').value.trim()||((video?.name||'个人录像')+' · '+numberText(start,2)+'–'+numberText(end,2)+' 秒 · 姿态候选'),players};
+}
+function activeAnalysisJob(job){return ['queued','running','cancelling'].includes(job.status)}
+function analysisJobLabel(status){return {queued:'排队中',running:'分析中',cancelling:'正在取消',completed:'已完成 · 待核对',failed:'分析失败',cancelled:'已取消',interrupted:'已中断'}[status]||'状态待确认'}
+function renderAnalysisJobs(jobs){
+  const container=$('analysisJobs');container.replaceChildren();if(!jobs.length){container.append(element('p','尚无分析任务。选择片段与区域后开始。','muted'));return}
+  for(const job of jobs){
+    const box=element('div',undefined,'analysis-job');box.append(element('h4',job.label||'本地姿态分析任务'),element('span',analysisJobLabel(job.status),'phase-badge'+(job.status==='completed'?' confirmed':job.status==='queued'||job.status==='running'?'':' rejected')));
+    box.append(element('p',numberText(job.start,2)+'–'+numberText(job.end,2)+' 秒 · '+(job.message||'等待处理'),'muted'));
+    const total=typeof job.total_frames==='number'?job.total_frames:0,processed=typeof job.processed_frames==='number'?job.processed_frames:0,progress=element('progress');progress.max=Math.max(total,1);progress.value=Math.max(0,Math.min(processed,progress.max));box.append(progress,element('p','已处理抽样帧 '+processed+' / '+(total||'待确认'),'muted'));
+    if(job.error)box.append(element('p',job.error));
+    if(activeAnalysisJob(job)){const cancel=element('button',job.status==='cancelling'?'取消中…':'取消任务','secondary');cancel.disabled=job.status==='cancelling';cancel.addEventListener('click',async()=>{cancel.disabled=true;try{await api('/api/analysis-jobs/'+encodeURIComponent(job.id)+'/cancel',{});await refreshAnalysisJobs()}catch(error){status(error.message,true);cancel.disabled=false}});box.append(cancel)}
+    if(job.status==='completed'&&job.result_id){const view=element('button','查看姿态证据','secondary');view.addEventListener('click',async()=>{view.disabled=true;try{await openAnalysisResult(job.result_id,true)}catch(error){status(error.message,true)}finally{view.disabled=false}});box.append(view)}
+    container.append(box);
+  }
+}
+function scheduleAnalysisPoll(){
+  clearTimeout(analysisJobTimer);analysisJobTimer=null;
+  if(analysisLastJobs.some(activeAnalysisJob))analysisJobTimer=setTimeout(()=>refreshAnalysisJobs(),2000);
+}
+async function openAnalysisResult(resultId,scroll=false){
+  await refreshPoseIndex(resultId);if(!$('poseSelect').value||$('poseSelect').value!==resultId)throw new Error('结果索引尚未更新，请稍后刷新姿态结果');if(scroll)$('poseSection').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function refreshAnalysisJobs(){
+  if(analysisJobsBusy)return;analysisJobsBusy=true;try{
+    const jobs=await api('/api/analysis-jobs');if(!Array.isArray(jobs))throw new Error('任务列表格式错误');analysisLastJobs=jobs;
+    const completed=jobs.filter(job=>job.status==='completed'&&job.result_id&&(activeAnalysisJob({status:analysisJobStates.get(job.id)})||job.id===analysisFocusJobId));
+    for(const job of jobs)analysisJobStates.set(job.id,job.status);renderAnalysisJobs(jobs);
+    const focused=jobs.find(job=>job.id===analysisFocusJobId);if(focused&&!activeAnalysisJob(focused)&&focused.status!=='completed')analysisFocusJobId=null;
+    if(!analysisFocusJobId){const active=jobs.find(activeAnalysisJob);if(active)analysisFocusJobId=active.id}
+    $('analysisJobStatus').textContent=jobs.some(activeAnalysisJob)?'本地处理进行中，每 2 秒刷新任务。':'任务列表已更新。';
+    const ready=completed.find(job=>job.id===analysisFocusJobId)||completed[0];if(ready){analysisFocusJobId=null;try{await openAnalysisResult(ready.result_id)}catch(error){$('analysisJobStatus').textContent=error.message}}
+  }catch(error){$('analysisJobStatus').textContent='暂时无法读取任务：'+error.message}
+  finally{analysisJobsBusy=false;scheduleAnalysisPoll()}
+}
+handler('captureAnalysisStart','click',()=>captureAnalysisFrame(true));handler('captureAnalysisCurrent','click',()=>captureAnalysisFrame(false));
+handler('resetAnalysisSide','click',()=>{analysisRegions[$('analysisSide').value]={foot_gate:null,anchor:null,anchor_time:null};analysisDrag=null;$('analysisDrawMode').value='region';renderAnalysisConfig();drawAnalysisCanvas()});handler('resetAnalysisAll','click',clearAnalysisRegions);
+$('analysisSide').addEventListener('change',()=>{$('analysisDrawMode').value=analysisRegions[$('analysisSide').value].foot_gate?'anchor':'region'});
+for(const id of ['analysisUseNear','analysisUseFar'])$(id).addEventListener('change',()=>{renderAnalysisConfig();drawAnalysisCanvas()});
+for(const id of ['pStart','pEnd'])$(id).addEventListener('input',updateAnalysisSelection);
+handler('startLocalAnalysis','click',async()=>{
+  if(analysisSubmitting)return;const payload=analysisRequest();analysisSubmitting=true;
+  try{const job=await api('/api/analysis-jobs',payload);analysisFocusJobId=job.id;analysisJobStates.set(job.id,job.status);$('analysisJobStatus').textContent='已提交本地分析任务。';status('任务已提交；录像在本机分析，结果是待核对的姿态候选。');await refreshAnalysisJobs()}finally{analysisSubmitting=false}
+});
+handler('refreshAnalysisJobs','click',refreshAnalysisJobs);
+async function refreshPoseIndex(preferredId=''){
+  const previous=preferredId||$('poseSelect').value;poseIndex=await api('/api/pose-index');
+  if(preferredId&&!poseIndex.some(item=>item.id===preferredId))throw new Error('结果索引尚未更新，请稍后刷新姿态结果');
+  selectFill($('poseSelect'),poseIndex.map(item=>({id:item.id,name:item.label||item.id})),'选择离线姿态结果');
+  $('poseSelect').value=poseIndex.some(item=>item.id===previous)?previous:(poseIndex[0]?.id||'');await loadPose($('poseSelect').value);
+}
+$('poseSelect').addEventListener('change',()=>loadPose($('poseSelect').value).catch(e=>status(e.message,true)));
+$('poseFrame').addEventListener('change',()=>jumpPoseFrame(Number($('poseFrame').value)));
+handler('reloadPose','click',refreshPoseIndex);
+handler('downloadPose','click',()=>{
+  if(!currentPose)throw new Error('请先选择姿态结果');
+  const blob=new Blob([JSON.stringify(currentPose.result,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=element('a');link.href=url;link.download='姿态分析_'+currentPose.item.id+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+refresh().then(()=>player($('personalPlayer'),{})).catch(e=>status(e.message,true));
+refreshPoseIndex().catch(e=>{$('poseEmpty').textContent=e.message});
+renderAnalysisConfig();updateAnalysisSelection();refreshAnalysisJobs();
+</script></body></html>

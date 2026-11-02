@@ -1,0 +1,19 @@
+{
+  "frames": 8,
+  "dim": 256,
+  "heads": 8,
+  "layers": 3,
+  "ffn_multiplier": 4,
+  "dropout": 0.0,
+  "activation": "relu",
+  "shared_player_encoder": true,
+  "margin": 1.0,
+  "contrastive_weight": 0.1,
+  "threshold": 0.5,
+  "nms_frames": 8,
+  "negative_gap": 3,
+  "negative_ratio": 3,
+  "grounding_residual": true,
+  "use_net": false,
+  "stream_residual": true
+}

@@ -1,0 +1,11 @@
+flatbuffers==25.12.19
+imageio-ffmpeg==0.6.0
+numpy==2.5.3
+onnxruntime==1.30.0
+opencv-contrib-python==5.0.0.93
+opencv-python==5.0.0.93
+packaging==26.3
+pillow==12.3.0
+protobuf==7.36.2
+rtmlib==0.0.16
+tqdm==4.70.1

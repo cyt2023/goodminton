@@ -1,0 +1,9 @@
+{
+  "version": "dsta-to-mainland-strokes-v1",
+  "source": "Explicit configurable name aliases; official 29 numeric class order is not released with a verified inference checkpoint. Unmapped fine labels remain unknown and retain their original spelling.",
+  "numeric_class_ids": {},
+  "names": {
+    "Smash": "smash", "Clear": "clear", "Drop Shot": "drop", "Drop": "drop", "Lift": "lift", "Drive": "drive", "Push": "push", "Net Shot": "net", "Net Kill": "net_kill", "Block": "defense", "Short Serve": "serve_short", "Long Serve": "serve_long",
+    "杀球": "smash", "高远球": "clear", "吊球": "drop", "挑球": "lift", "抽球": "drive", "推球": "push", "放网": "net", "扑球": "net_kill", "挡网": "defense", "发网前球": "serve_short", "发后场球": "serve_long"
+  }
+}

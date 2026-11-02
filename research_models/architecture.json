@@ -1,0 +1,134 @@
+{
+  "version": "2026-10-30-next-working-milestone",
+  "inference_flow": [
+    "RacketVision +2D pose +optional monocular3D",
+    "ShuttleHitFormer +DSTA",
+    "Unified Stroke Events",
+    "Explainable Stroke Quality Assessment",
+    "TactiPlay-inspired evidence-grounded LLM review",
+    "Existing interactive UI"
+  ],
+  "important_routing": [
+    "SHF retains2D COCO17/court/shuttle inputs; estimated3D is routed to quality assessment, not substituted into a2D checkpoint",
+    "DSTA remains the independent RGB temporal classifier; no new3D stroke classifier",
+    "BFMD is an external evaluation consumer, never an inference stage"
+  ],
+  "components": {
+    "racketvision": {
+      "status": "operational",
+      "default_inference": true
+    },
+    "pose2d": {
+      "status": "operational",
+      "default_inference": true
+    },
+    "pose3d": {
+      "status": "operational_optional_estimator",
+      "default_inference": false,
+      "quality_status": "uncalibrated root-relative estimates; no global displacement",
+      "weights_sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1"
+    },
+    "shuttlehitformer": {
+      "status": "partially_integrated",
+      "reason": "Trained local variant; native raw-video benchmark path operational, production UI still retains baseline integration"
+    },
+    "dsta": {
+      "status": "partially_integrated",
+      "reason": "Local architecture and pilot inference work; fully trained fine-grained checkpoint unavailable"
+    },
+    "unified_events": {
+      "status": "operational",
+      "reason": "Native clock, source hashes, provenance, uncertainty and missingness preserved"
+    },
+    "quality_assessment": {
+      "status": "partially_integrated",
+      "reason": "2D/estimated3D observations and existingSPI/HFIS formulas; validated biomechanical scoring references unavailable"
+    },
+    "tactical_review": {
+      "status": "partially_integrated",
+      "reason": "Four-level evidence catalogue, taxonomy, links, conditional movement view and local LLM selection work; real rally/sequence reasoning requires reviewed rally boundaries"
+    },
+    "ui": {
+      "status": "operational_additive_extension",
+      "reason": "Existing upload/video/labels/assessment remain; optional3D and review controls added"
+    }
+  },
+  "independent_benchmark": {
+    "name": "BFMD",
+    "status": "operational_partial_coverage",
+    "in_inference_graph": false,
+    "manifest": "../03_数据/独立基准/BFMD/manifest.json",
+    "raw_video_test_seconds": 16,
+    "local_training_and_calibration": "sealed; guarded",
+    "upstream_training_overlap": "unknown"
+  },
+  "unavailable": [
+    "Fully trained/verified DSTA fine-grained weights",
+    "Calibrated monocular global3D motion and statistical error bounds",
+    "Measured independent BFMD shuttle/pose3D ground truth",
+    "Full TactiPlay code/system replication",
+    "Full19-match end-to-end evaluation"
+  ],
+  "professional_four_agent_platform": {
+    "schema": "badminton-professional-agents/1",
+    "status": "operational_professional_pilot",
+    "entry": "professional_agents/cli.py",
+    "controller": "professional_agents/runtime.py",
+    "agents": [
+      "PerceptionAgent",
+      "StrokeUnderstandingAgent",
+      "TechnicalTacticalAgent",
+      "ExpertDemonstrationAgent"
+    ],
+    "ui": "additive collapsible professional workflow panel on existing homepage and analysis page",
+    "datasets_manifest": "../03_数据/职业Agent平台/datasets.json",
+    "retrieval": {
+      "status": "structured_annotation_baseline_operational",
+      "gallery_clips": 338,
+      "gallery_matches": 1,
+      "corrective_relevance_validated": false
+    },
+    "optimizers": {
+      "AFLOW": "restricted MCTS research reproduction; official source audited, not executed",
+      "EVOFLOW": "restricted niching evolutionary research reproduction; official repository404"
+    },
+    "experiments": {
+      "conditional_internal_validation": 269,
+      "budget_per_search": 24,
+      "frozen_BFMD_pilot_seconds": 24,
+      "full_match_final_test": "unavailable/not_run"
+    },
+    "limits": [
+      "No amateur adaptation added",
+      "SHF abstains without compatible automatic court features; DSTA lacks validated weights",
+      "No reviewed retrieval relevance or tactical-quality ground truth",
+      "Current UI runner allowlists2 existing public professional clips; expanding datasets requires identity/split review"
+    ],
+    "hit_tool_selection": {
+      "status": "operational_input_quality_and_budget_router",
+      "mode": "AGENT",
+      "original_fixed_aflow_evoflow_configs": "preserved; not re-scored or used as new routing evidence",
+      "tools": [
+        "rules",
+        "fusion",
+        "gru_shared",
+        "gru_original",
+        "shf",
+        "hitnet",
+        "rgb_resnet",
+        "swingnet"
+      ],
+      "swingnet_status": "registered but unavailable for automatic inference; original preprocessing incomplete",
+      "router": "compatibility/coverage/budget-v1; not an AFlow/EvoFlow learned selector",
+      "max_detectors_per_request": 2,
+      "no_test_ground_truth_selection": true,
+      "no_historical_F1_as_runtime_confidence": true,
+      "finding_and_classification": "hit tools localize; BST classifies their context clips",
+      "remaining": [
+        "fresh professional development data with hit truth for learning/comparing routing",
+        "verified full SwingNet preprocessing",
+        "validated DSTA weights remain unavailable"
+      ]
+    }
+  }
+}

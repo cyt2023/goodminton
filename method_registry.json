@@ -1,0 +1,693 @@
+{
+  "schema_version": 1,
+  "snapshot_date": "2026-10-07",
+  "snapshot_note": "v0.16：三源48待核对，其中22连续回球证据优先；三段用户确认递球按上下文排除，原两条新技术标签模型均1/2。仅视频处理与固定模型推理，没有训练。EOF与登记视频路径修复。",
+  "priorities": {
+    "A": "先补齐感知、片段、示范素材",
+    "B": "形成检索—对照—反馈—核验闭环",
+    "C": "按缺口选做的重模型或替代实验"
+  },
+  "methods": [
+    {
+      "id": "pose_2d",
+      "name": "YOLOX + RTMPose",
+      "stage": "看见球员与姿态",
+      "priority": "A",
+      "reproduction_mode": "官方预训练推理",
+      "status_snapshot": "逐帧专项分支已接入：真实156秒录像解码4678帧，A/B分别分配4431/4279帧；身份和关节准确率未评价",
+      "depends_on": [],
+      "local_code": [
+        "04_原型/analyze_pose.py",
+        "04_原型/auto_players.py",
+        "04_原型/specialist_pose.py"
+      ],
+      "source_url": "https://github.com/Tau-J/rtmlib",
+      "acceptance_note": "粗筛5fps与原片逐帧分支分别保存；分配率不算准确率，需核对背景人、身份和遮挡"
+    },
+    {
+      "id": "vlm_stroke",
+      "name": "本地 Qwen3-VL 可见击球与正反手候选判断",
+      "stage": "找到技术片段",
+      "priority": "A",
+      "reproduction_mode": "现成视觉模型基线",
+      "status_snapshot": "v0.8仅判断可见击球和正反手；23个展示候选中12个疑似反手，发现疑似正反手误判，待运动员核对；v0.7球种基线归档",
+      "depends_on": [
+        "pose_2d"
+      ],
+      "local_code": [
+        "04_原型/specialist_pipeline.py",
+        "04_原型/action_search.py",
+        "04_原型/vision_model.py",
+        "04_原型/classify_actions.py"
+      ],
+      "source_url": "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct",
+      "acceptance_note": "用户问题与BST球种均不进入视觉提示；连续原图与同帧检测框。BST默认类别无正反手标签；通用VLM正反手尚不可靠；旧100候选4个跟踪缺失、2个JSON截断错误的修正见研究记录",
+      "previous_model_run_evidence": "03_数据/方法实验/记录/fef93cbc35844f81995537ca2465a122.json",
+      "run_evidence": "03_数据/方法实验/记录/1d7c43a03db7409cbce72593631cbff4.json"
+    },
+    {
+      "id": "rule_retrieval",
+      "name": "现有条件规则检索",
+      "stage": "找到示范",
+      "priority": "B",
+      "reproduction_mode": "工程基线",
+      "status_snapshot": "已接入研究页；缺少教学核对",
+      "depends_on": [
+        "reference_index"
+      ],
+      "local_code": [
+        "04_原型/server.py"
+      ],
+      "source_url": "",
+      "acceptance_note": "固定候选库比较；分数不当适用概率"
+    },
+    {
+      "id": "reference_index",
+      "name": "ShuttleSet / BST 逐拍索引",
+      "stage": "示范建库",
+      "priority": "A",
+      "reproduction_mode": "作者数据索引接入",
+      "status_snapshot": "已有12条外链候选；尚无教学适用性标签",
+      "depends_on": [],
+      "local_code": [
+        "04_原型/import_shuttleset.py"
+      ],
+      "source_url": "https://github.com/Va6lue/BST-Badminton-Stroke-type-Transformer",
+      "acceptance_note": "核对来源、时间码、播放与可比条件"
+    },
+    {
+      "id": "eventanchor",
+      "name": "EventAnchor",
+      "stage": "事件定位与校正",
+      "priority": "A",
+      "reproduction_mode": "功能借鉴",
+      "status_snapshot": "已有阶段编辑；未复现原系统",
+      "depends_on": [
+        "pose_2d"
+      ],
+      "local_code": [
+        "04_原型/phase_review.py",
+        "04_原型/prepare_phase_reviews.py"
+      ],
+      "source_url": "https://zjuidg.org/source/projects/eventanchor/eventanchor.pdf",
+      "acceptance_note": "与纯手工比较定位时间、漏检与校正次数"
+    },
+    {
+      "id": "protal",
+      "name": "ProTAL",
+      "stage": "事件候选",
+      "priority": "A",
+      "reproduction_mode": "功能借鉴",
+      "status_snapshot": "可借鉴规则；当前不是其半监督模型",
+      "depends_on": [
+        "pose_2d"
+      ],
+      "local_code": [
+        "04_原型/action_windows.py"
+      ],
+      "source_url": "https://arxiv.org/abs/2505.17555",
+      "acceptance_note": "规则窗口召回与边界偏差；不以腕高定义触球"
+    },
+    {
+      "id": "tracknet",
+      "name": "TrackNetV3",
+      "stage": "羽毛球轨迹",
+      "priority": "A",
+      "reproduction_mode": "作者预训练推理，本地适配",
+      "status_snapshot": "官方TrackNetV3与InpaintNet权重已接入；4678帧实际MPS推理，3900帧原始检测输出、762帧请求补全；观察到疑似静态物体误检，未评价轨迹准确率",
+      "depends_on": [],
+      "local_code": [
+        "04_原型/specialist_tracknet.py",
+        "04_原型/specialist_model.py"
+      ],
+      "source_url": "https://github.com/qaz812345/TrackNetV3",
+      "acceptance_note": "原始检测与补全分别保存；使用qaz812345轨迹修正版本，与BST论文所用注意力版本不同；seq_len8、非重叠模式、batch2，配置和权重SHA留存"
+    },
+    {
+      "id": "court_calibration",
+      "name": "场地单应性标定",
+      "stage": "地面位置",
+      "priority": "A",
+      "reproduction_mode": "工程基线",
+      "status_snapshot": "场线候选检查和经确认点位的单应性加载已实现；当前录像仅有未确认场线候选，未使用场地坐标",
+      "depends_on": [],
+      "local_code": [
+        "04_原型/court_calibration.py"
+      ],
+      "source_url": "",
+      "acceptance_note": "只有source SHA匹配、review_status confirmed且重投影误差通过才启用；仅转换地面脚点；本轮没有人工确认标定"
+    },
+    {
+      "id": "bst",
+      "name": "BST",
+      "stage": "击球分类",
+      "priority": "A",
+      "reproduction_mode": "作者BST-0骨干及权重推理，本地输入适配",
+      "status_snapshot": "BST-0已接入并完成75候选分类；23候选通过后续展示条件。完整BST-CG-AP代码及权重准备，因场地未确认而未运行；未复现论文指标",
+      "depends_on": [
+        "pose_2d",
+        "tracknet"
+      ],
+      "local_code": [
+        "04_原型/specialist_bst.py",
+        "04_原型/specialist_events.py",
+        "04_原型/specialist_pipeline.py",
+        "04_原型/specialist_model.py"
+      ],
+      "source_url": "https://github.com/Va6lue/BST-Badminton-Stroke-type-Transformer",
+      "acceptance_note": "沿用作者框对角线中心归一化、骨骼、seq100采样/补零与25标签；姿态前端、TrackNet版本、自动事件窗口及Top/Bottom排序为适配。完整版本另依赖已确认场地标定；独立准确率评价未做"
+    },
+    {
+      "id": "tempose",
+      "name": "TemPose",
+      "stage": "击球分类备选",
+      "priority": "C",
+      "reproduction_mode": "替代基线",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "pose_2d",
+        "tracknet",
+        "court_calibration"
+      ],
+      "local_code": [],
+      "source_url": "https://github.com/MagnusPetersenIbh/TemPose-BadmintonActionRecognition",
+      "acceptance_note": "BST不适配或需要识别对照时再做；不同时默认部署"
+    },
+    {
+      "id": "madr",
+      "name": "MADR / From Alignment to Reason",
+      "stage": "自然语言检索",
+      "priority": "B",
+      "reproduction_mode": "先重写轻量基线",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "reference_index",
+        "eventanchor"
+      ],
+      "local_code": [],
+      "source_url": "https://people.cs.nycu.edu.tw/~yushuen/data/BadmintonRetrieval26.pdf",
+      "acceptance_note": "同库比较文本/条件检索；作者方法的日志不等于自动视频理解"
+    },
+    {
+      "id": "expertaf",
+      "name": "ExpertAF",
+      "stage": "纠正示范与反馈",
+      "priority": "C",
+      "reproduction_mode": "先借鉴配对；官方方法另立实验",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "reference_index",
+        "pose_3d"
+      ],
+      "local_code": [],
+      "source_url": "https://github.com/thechargedneutron/ExpertAF",
+      "acceptance_note": "官方代码/数据可见；模型权重可用性及本机资源待核对"
+    },
+    {
+      "id": "dtw_2d",
+      "name": "缺失感知2D阶段内DTW基线",
+      "stage": "动作对照",
+      "priority": "B",
+      "reproduction_mode": "工程基线；不称CoachMe复现",
+      "status_snapshot": "同一球员、同一机位、同类预测标签的个人片段检索和2D DTW已接入；23候选中15个找到可对齐个人片段，网页保留原片时间",
+      "depends_on": [
+        "pose_2d",
+        "bst"
+      ],
+      "local_code": [
+        "04_原型/reference_alignment.py",
+        "04_原型/build_specialist_report.py"
+      ],
+      "source_url": "",
+      "acceptance_note": "缺失关节掩码、至少8个共同有效关节、髋中心/躯干尺度、带宽0.25与击球候选前后约束；保存原帧/时间/时长；阶段锚点未确认，个人参考无正确动作标签，不用于教学诊断"
+    },
+    {
+      "id": "coachme",
+      "name": "CoachMe",
+      "stage": "参考差异与指导",
+      "priority": "C",
+      "reproduction_mode": "官方模型复现另立实验",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "pose_3d",
+        "reference_index",
+        "eventanchor"
+      ],
+      "local_code": [],
+      "source_url": "https://github.com/MotionXperts/MotionExpert",
+      "acceptance_note": "官方有代码/预训练权重入口；CARL对齐与骨架映射单独核对"
+    },
+    {
+      "id": "pose_3d",
+      "name": "可信单目3D姿态试验",
+      "stage": "3D事实",
+      "priority": "C",
+      "reproduction_mode": "预训练模型适配试验",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "pose_2d"
+      ],
+      "local_code": [],
+      "source_url": "",
+      "acceptance_note": "先核对权重/许可证/硬件；跨视角结果需有可信评价依据"
+    },
+    {
+      "id": "posecoach",
+      "name": "PoseCoach",
+      "stage": "角度与时间属性对照",
+      "priority": "C",
+      "reproduction_mode": "先借鉴2D展示；3D方法另试",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "pose_3d",
+        "reference_index"
+      ],
+      "local_code": [],
+      "source_url": "https://arxiv.org/abs/2204.08805",
+      "acceptance_note": "2D角度不称真实角度；参考可比性与遮挡分别检查"
+    },
+    {
+      "id": "vismimic",
+      "name": "VisMimic",
+      "stage": "运动链与反馈展示",
+      "priority": "B",
+      "reproduction_mode": "先借鉴阶段关键帧；完整3D延后",
+      "status_snapshot": "已有阶段编辑前置能力；未复现",
+      "depends_on": [
+        "eventanchor",
+        "reference_index"
+      ],
+      "local_code": [],
+      "source_url": "https://ssxiexiao.github.io/papers/vismimic.pdf",
+      "acceptance_note": "个人/参考对应关键帧与可核对证据；反馈动画另需运动真实性评价"
+    },
+    {
+      "id": "virtual_pose",
+      "name": "Virtual Pose Coach",
+      "stage": "体型重定向",
+      "priority": "C",
+      "reproduction_mode": "完整方法延后",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "pose_3d",
+        "reference_index"
+      ],
+      "local_code": [],
+      "source_url": "https://openaccess.thecvf.com/content/CVPR2025W/CVSPORTS/papers/Chiu_Virtual_Pose_Coach_A_Motion-Retargeting_Approach_for_Pose_Training_CVPRW_2025_paper.pdf",
+      "acceptance_note": "依赖骨架及可靠3D；不以动画可播放证明有效"
+    },
+    {
+      "id": "techcoach",
+      "name": "TechCoach",
+      "stage": "技术要点反馈",
+      "priority": "B",
+      "reproduction_mode": "先借鉴输出结构；网络复现待条件",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "eventanchor"
+      ],
+      "local_code": [],
+      "source_url": "https://github.com/iSEE-Laboratory/TechCoach",
+      "acceptance_note": "本轮仓库仅见README/数据说明；不声称现成可运行权重"
+    },
+    {
+      "id": "t3set",
+      "name": "T3Set / SenseCoach",
+      "stage": "建议标注与评价",
+      "priority": "B",
+      "reproduction_mode": "标注结构借鉴",
+      "status_snapshot": "未接入",
+      "depends_on": [],
+      "local_code": [],
+      "source_url": "https://github.com/jima-cs/T3Set",
+      "acceptance_note": "视频与IMU训练模型不直接迁移；主题/证据/办法分别标注"
+    },
+    {
+      "id": "agentcoach",
+      "name": "AgentCoach",
+      "stage": "教学规则评估器",
+      "priority": "C",
+      "reproduction_mode": "规则库借鉴；模型待全文核对",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "eventanchor"
+      ],
+      "local_code": [],
+      "source_url": "https://engineering.purdue.edu/cdesign/wp/agentcoach/",
+      "acceptance_note": "先教练核对少量规则；不能由LLM编译就视为教学标准"
+    },
+    {
+      "id": "viddiff",
+      "name": "VidDiff",
+      "stage": "两段视频差异",
+      "priority": "B",
+      "reproduction_mode": "先现成VLM对照基线",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "reference_index",
+        "eventanchor"
+      ],
+      "local_code": [],
+      "source_url": "https://arxiv.org/abs/2503.07860",
+      "acceptance_note": "差异事实、时间定位与技术错误分别评价"
+    },
+    {
+      "id": "motionhalluc",
+      "name": "MotionHalluc / PPV",
+      "stage": "建议证据核验",
+      "priority": "B",
+      "reproduction_mode": "先重写有限可观察谓词；完整3D延后",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "dtw_2d",
+        "reference_index"
+      ],
+      "local_code": [],
+      "source_url": "https://arxiv.org/abs/2606.23061",
+      "acceptance_note": "保存每条陈述依赖与测量；2D版本不是原PPV复现"
+    },
+    {
+      "id": "cigtime",
+      "name": "CigTime",
+      "stage": "动作编辑与指令",
+      "priority": "C",
+      "reproduction_mode": "完整方法延后",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "pose_3d",
+        "reference_index"
+      ],
+      "local_code": [],
+      "source_url": "https://github.com/qhFang/CigTime",
+      "acceptance_note": "需动作编辑器及骨架适配；模型编辑成功不算人学会"
+    },
+    {
+      "id": "champ",
+      "name": "CHAMP",
+      "stage": "多姿态假设与校准",
+      "priority": "C",
+      "reproduction_mode": "模型适配及独立校准试验",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "pose_3d"
+      ],
+      "local_code": [],
+      "source_url": "https://arxiv.org/abs/2407.06141",
+      "acceptance_note": "不从头训练；独立事件校准；总体姿态覆盖不等于建议错误率"
+    },
+    {
+      "id": "cups",
+      "name": "CUPS",
+      "stage": "序列姿态不确定性",
+      "priority": "C",
+      "reproduction_mode": "模型适配及独立校准试验",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "pose_3d"
+      ],
+      "local_code": [],
+      "source_url": "https://proceedings.mlr.press/v267/zhang25g.html",
+      "acceptance_note": "与CHAMP择一先试；时间依赖与分布变化单独记录"
+    },
+    {
+      "id": "multihypothesis",
+      "name": "多解释一致才输出",
+      "stage": "核验强基线",
+      "priority": "B",
+      "reproduction_mode": "工程基线",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "motionhalluc",
+        "eventanchor"
+      ],
+      "local_code": [],
+      "source_url": "",
+      "acceptance_note": "先合理阶段锚点；全一致、投票与单次测量比较同覆盖及预算"
+    },
+    {
+      "id": "umivr",
+      "name": "UMIVR",
+      "stage": "澄清检索问题",
+      "priority": "C",
+      "reproduction_mode": "追问策略借鉴",
+      "status_snapshot": "未接入",
+      "depends_on": [
+        "madr"
+      ],
+      "local_code": [],
+      "source_url": "https://arxiv.org/abs/2507.15504",
+      "acceptance_note": "追问是否改善检索；记录时间/次数，不只看聊天流畅"
+    },
+    {
+      "id": "tactiplay",
+      "name": "TactiPlay",
+      "stage": "比赛条件与复盘",
+      "priority": "B",
+      "reproduction_mode": "上下文记录借鉴",
+      "status_snapshot": "已有人工条件字段；未复现原方法",
+      "depends_on": [
+        "eventanchor"
+      ],
+      "local_code": [],
+      "source_url": "https://arxiv.org/abs/2607.27125",
+      "acceptance_note": "可观察条件与自述分开；条件缺失不算匹配"
+    },
+    {
+      "id": "insightchaser",
+      "name": "InsightChaser / Sporthesia",
+      "stage": "证据联动与可视化",
+      "priority": "B",
+      "reproduction_mode": "功能借鉴",
+      "status_snapshot": "已有时刻回看；未复现原系统",
+      "depends_on": [
+        "eventanchor"
+      ],
+      "local_code": [],
+      "source_url": "https://ssxiexiao.github.io/papers/insightchaser.pdf",
+      "acceptance_note": "文本-时间戳-局部证据可回溯；操作耗时/误解单独记"
+    },
+    {
+      "id": "human_stroke_review",
+      "name": "大陆词表与运动员逐拍核对",
+      "stage": "监督标签与检索纠正",
+      "priority": "A",
+      "reproduction_mode": "工程实现",
+      "status_snapshot": "75条既有球种标签保留；新增声画修正候选回看、每批20段的多样性优先核对队列。尚无人工确认中心。",
+      "depends_on": [
+        "bst"
+      ],
+      "local_code": [
+        "04_原型/stroke_taxonomy.py",
+        "04_原型/stroke_review.py",
+        "04_原型/static/label_strokes.html",
+        "04_原型/hit_segments.py",
+        "04_原型/active_review.py"
+      ],
+      "source_url": "https://tyb.cidp.edu.cn/info/1074/1146.htm",
+      "acceptance_note": "保存真实用户选择、来源与版本历史；模型猜测默认折叠；第一批为开发集，未知保持未知，不伪造运动员标签",
+      "previous_status_snapshots": [
+        "共享词表已接入，75个真实候选可标注，首批30个就绪；交付时人工标签0条",
+        "75个候选已人工标注；大陆词表v3；疑似重复折叠及跳过恢复已接入。"
+      ],
+      "run_evidence": "05_研究记录/2026-10-06_逐拍帧级提取与击球核对.md"
+    },
+    {
+      "id": "personal_stroke_head",
+      "name": "局部击球姿态与过滤轨迹的个人分类头",
+      "stage": "球种识别适配",
+      "priority": "A",
+      "reproduction_mode": "工程学习基线",
+      "status_snapshot": "旧模型及22/62=35.5%同录像结果保留；新增固定开发对照未见上下文整体改善，因此默认仍用局部候选。正样本中心须人工确认。",
+      "depends_on": [
+        "bst",
+        "human_stroke_review"
+      ],
+      "local_code": [
+        "04_原型/personal_learning.py",
+        "04_原型/learning_jobs.py",
+        "04_原型/stroke_features.py",
+        "04_原型/personal_head.py",
+        "04_原型/evaluate_improved_learning.py",
+        "04_原型/evaluate_personal_learning.py",
+        "04_原型/context_features.py"
+      ],
+      "source_url": "",
+      "acceptance_note": "只用人工标签训练；重新计算人工窗口与球员输入；保存标签快照、模型版本和权重；学习预测侧栏显示、不自动替换其他录像，训练内一致率不算泛化准确率；下一次训练正样本须确认触球中心，历史模型与检查记录保留",
+      "previous_status_snapshots": [
+        "已实现目标球员排序的300维BST特征与岭回归分类头；75段特征实际准备完成，等待人工标签；尚未运行训练或独立评价"
+      ],
+      "run_evidence": "05_研究记录/2026-10-06_个人识别改进与对照.md"
+    },
+    {
+      "id": "hit_gru",
+      "name": "Badminton-hit-detection 公开 shuttlepose GRU 权重",
+      "stage": "击球窗口检测",
+      "priority": "A",
+      "reproduction_mode": "作者权重与输入格式移植，NumPy推理",
+      "status_snapshot": "已接入两段真实录像；5个真实窗口与Keras Torch后端最大差4.17e-7。尚未评价触球准确率。",
+      "depends_on": [
+        "pose_2d",
+        "tracknet"
+      ],
+      "local_code": [
+        "04_原型/hit_gru.py",
+        "04_原型/convert_hit_gru.py"
+      ],
+      "source_url": "https://github.com/kwyoke/Badminton-hit-detection",
+      "acceptance_note": "14帧输入，目标为末6帧是否击球及近远端；输出不是触球帧真值或已校准正确概率。"
+    },
+    {
+      "id": "audio_visual_hit",
+      "name": "击球瞬态声音与球轨迹/手腕/GRU联合定位",
+      "stage": "细化逐拍中心",
+      "priority": "A",
+      "reproduction_mode": "借鉴声画融合思想，本地工程规则",
+      "status_snapshot": "第一段4处、第二段1处中心修正建议；第二段1处可能漏拍。尚无人确认。",
+      "depends_on": [
+        "hit_gru"
+      ],
+      "local_code": [
+        "04_原型/hit_refinement.py"
+      ],
+      "source_url": "https://www.isca-archive.org/avsp_2011/huang11_avsp.pdf",
+      "acceptance_note": "网球声画研究只作为方法启发；本实现不是论文网络复现，音频同步、邻场噪声及羽毛球精度未验证。"
+    },
+    {
+      "id": "active_stroke_review",
+      "name": "分歧、稀缺球种与时序多样性的主动核对",
+      "stage": "减少标注工作",
+      "priority": "A",
+      "reproduction_mode": "借鉴主动学习原则的自研选择策略",
+      "status_snapshot": "每批20段，加入真实同录像留出错误与留出组外无同类训练样本的理由；跨录像候选参与分歧与多样性排序。",
+      "depends_on": [
+        "human_stroke_review",
+        "personal_stroke_head",
+        "audio_visual_hit"
+      ],
+      "local_code": [
+        "04_原型/active_review.py",
+        "04_原型/static/label_strokes.html"
+      ],
+      "source_url": "https://burrsettles.com/pub/settles.activelearning.pdf",
+      "acceptance_note": "不自动生成训练标签；队列不是随机独立评价样本。节省时间和准确率提升均需后续量化。"
+    },
+    {
+      "id": "personal_transfer_hints",
+      "name": "人工标注分类头的跨录像候选",
+      "stage": "复用人工学习结果",
+      "priority": "A",
+      "reproduction_mode": "现有冻结分类头推理的本地工程接入",
+      "status_snapshot": "第二段15条候选计算成功，无新标签、无该录像准确率；新专项任务结束后自动生成候选。",
+      "depends_on": [
+        "personal_stroke_head",
+        "human_stroke_review"
+      ],
+      "local_code": [
+        "04_原型/personal_transfer.py",
+        "04_原型/specialist_pipeline.py",
+        "04_原型/stroke_review.py"
+      ],
+      "source_url": null,
+      "acceptance_note": "不推断跨录像运动员身份，不替换BST或人工标签，不把未校准分数当正确概率。"
+    },
+    {
+      "id": "stroke_flight_context",
+      "name": "较完整击球与来去球上下文",
+      "stage": "确认片段范围",
+      "priority": "A",
+      "reproduction_mode": "工程输入修正",
+      "status_snapshot": "两段录像90候选完成完整范围推理；页面默认完整回放，21帧仅核对触球。边界未确认。",
+      "depends_on": [
+        "pose_2d"
+      ],
+      "local_code": [
+        "04_原型/stroke_context.py",
+        "04_原型/preserved_bst.py"
+      ],
+      "source_url": "",
+      "acceptance_note": "统计全片漏拍、重复与触球误差后再评球种；不可把较长范围当提取准确。"
+    },
+    {
+      "id": "bst_public_replay",
+      "name": "BST作者预处理数据与原分类层回放",
+      "stage": "保留基础识别知识",
+      "priority": "A",
+      "reproduction_mode": "官方权重与官方数据兼容性回放",
+      "status_snapshot": "33481样本三文件齐全，train25741/val4241/test3499；实际加载400train+200val，原25类模型验证抽样166/200。",
+      "depends_on": [
+        "stroke_flight_context"
+      ],
+      "local_code": [
+        "04_原型/bst_public_data.py",
+        "04_原型/preserved_bst.py"
+      ],
+      "source_url": "https://github.com/Va6lue/BST-Badminton-Stroke-type-Transformer",
+      "run_evidence": "03_数据/公开训练数据/BST_ShuttleSet/开发样本/manifest.json",
+      "acceptance_note": "83.0%为作者验证抽样兼容性结果，不是个人录像准确率或完整论文复现；test未用。"
+    },
+    {
+      "id": "frozen_teacher_residual",
+      "name": "公开与个人标注混合的有界残差适配",
+      "stage": "学习个人差异",
+      "priority": "B",
+      "reproduction_mode": "开发训练实验",
+      "status_snapshot": "400公开训练+42个人兼容标签，骨干与MLP冻结；公开166/200不变，第二段自动5/9不变，人工辅助8条5/8降4/8。未激活。",
+      "depends_on": [
+        "bst_public_replay"
+      ],
+      "local_code": [
+        "04_原型/teacher_adaptation.py",
+        "04_原型/learning_jobs.py"
+      ],
+      "source_url": "",
+      "run_evidence": "03_数据/击球标注/预训练保留适配/2b098223d0ea47578d792ca6b0415b51/manifest.json",
+      "acceptance_note": "第二段为开发对照；细分类与无击球不强行映射。学习结果版本化保存，保持原模型。"
+    },
+    {
+      "id": "author_only_continued_head",
+      "name": "仅作者数据继续训练原BST分类层",
+      "stage": "改善基础球种分类",
+      "priority": "A",
+      "reproduction_mode": "作者模型分类层继续训练，非全骨干重训",
+      "status_snapshot": "25741训练样本，4241验证选版本；原3549/4241，候选3577/4241；个人训练0，test未用。",
+      "depends_on": [
+        "bst_public_replay"
+      ],
+      "local_code": [
+        "04_原型/public_bst_training.py"
+      ],
+      "source_url": "https://github.com/Va6lue/BST-Badminton-Stroke-type-Transformer",
+      "run_evidence": "03_数据/公开训练数据/BST_ShuttleSet/本地继续训练/运行记录/bc2366ef0c454be99a2a3d8c74d2069b/manifest.json",
+      "acceptance_note": "作者验证开发结果，仅提高0.66百分点；个人跨视角提升等待新标签，不自动替换原模型。"
+    },
+    {
+      "id": "public_only_frozen_review",
+      "name": "公开训练后冻结新旧预测，再人工检查",
+      "stage": "检查普通录像迁移效果",
+      "priority": "B",
+      "reproduction_mode": "冻结自动输入的人工对照",
+      "status_snapshot": "v0.16：三源48待核对，其中22连续回球证据优先；三段用户确认递球按上下文排除，原两条新技术标签模型均1/2。仅视频处理与固定模型推理，没有训练。EOF与登记视频路径修复。",
+      "depends_on": [
+        "author_only_continued_head"
+      ],
+      "local_code": [
+        "04_原型/public_bst_review.py",
+        "04_原型/stroke_review.py",
+        "04_原型/static/label_strokes.html"
+      ],
+      "source_url": "",
+      "acceptance_note": "此前跳过候选的小规模试核对，不是代表性全片准确率；需要新录像。",
+      "run_evidence": "03_数据/击球标注/公开模型检查批次/运行记录/460b74361c3a47cd9bca7066c72ea514/交付时检查汇总.json"
+    }
+  ],
+  "snapshot_history": [
+    {
+      "snapshot_date": "2026-10-06",
+      "snapshot_note": "v0.9新增大陆词表、真实候选人工标注及个人分类头学习入口；75段特征实际提取，交付时人工标签0条，尚未训练或评价识别改善。"
+    },
+    {
+      "snapshot_date": "2026-10-06",
+      "snapshot_note": "v0.10：75个候选人工标注；局部姿态/过滤球轨迹与个人头已接入。固定53条分组检查11→16；当前62条嵌套检查22条正确，尚无新录像验证。"
+    }
+  ]
+}

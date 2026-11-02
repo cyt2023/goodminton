@@ -1,0 +1,30 @@
+{
+  "classes": 29,
+  "input_size": 160,
+  "fps": 25,
+  "sample_stride": 4,
+  "window_frames": 768,
+  "feature_length": 768,
+  "attention_clip_frames": 48,
+  "adapter_ratio": 0.25,
+  "adapter_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "alpha": 0.5,
+  "head_dim": 512,
+  "head_max_seq": 2304,
+  "head_window": 19,
+  "with_checkpoint": true,
+  "drop_path": 0.1
+}

@@ -1,0 +1,11 @@
+{
+  "perception_backend": "racketvision",
+  "recognition_chunk_seconds": 120,
+  "duplicate_hit_frames": 2,
+  "action_match_tolerance_seconds": 0.12,
+  "action_confidence_min": 0.5,
+  "conflicting_class_margin": 0.05,
+  "pose_point_score_min": 0.5,
+  "trajectory_prediction_enabled": false,
+  "pose3d_enabled": false
+}
