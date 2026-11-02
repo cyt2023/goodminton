@@ -8,6 +8,10 @@ STORE=ROOT.parent/'03_数据/独立基准/BFMD'
 SPLIT={'dev':['PSEgVtdtLJ0','ISFs9Gku1LA','Bxhh21Rsk0E','eKPtHLGFxLE','_lcVkJifJnA','voPcKnC2KgY','L7fSFiWnwRk','rie6e0WhOB8'],
        'sealed_test':['67HGajaYmUM','TDn26B6iAjg','y-YPKEW5VUs','wNAPckJigDo']}
 PER_MATCH={'dev':8,'sealed_test':10};SEED=20261102;PAD=1.0
+# Second sealed test (added after the first test was scored): all sampled All England clips,
+# none of which had perception, predictions or scores before the v2 policy was frozen.
+AE_TEST={'L7fSFiWnwRk','rie6e0WhOB8','wNAPckJigDo'}
+def in_role(clip,role):return clip['youtube_id'] in AE_TEST if role=='ae_test' else clip['role']==role and clip['youtube_id'] not in AE_TEST
 
 def read(p):return json.loads(Path(p).read_text())
 def save(p,v):Path(p).parent.mkdir(parents=True,exist_ok=True);Path(p).write_text(json.dumps(v,ensure_ascii=False,indent=2)+'\n')

@@ -14,9 +14,11 @@ STUDY=ROOT.parent/'03_数据/独立基准/BFMD/pipeline_study'
 VARIANT=os.environ.get('BFMD_VARIANT','');SUFFIX=f'_{VARIANT}' if VARIANT else '';ROUTES=STUDY/f'routes{SUFFIX}'  # v2 = refined timing + filters
 VOTE_LEVELS=[2,3,4,5,6];TOL=.1;RIDGE=3.
 
+import sys;sys.path.insert(0,str(ROOT))
+from benchmarks.bfmd.rally_clips import in_role
 def read(p):return json.loads(Path(p).read_text())
 def save(p,v):Path(p).parent.mkdir(parents=True,exist_ok=True);Path(p).write_text(json.dumps(v,ensure_ascii=False,indent=1,allow_nan=False)+'\n')
-def clips(role):return [c for c in read(STUDY/'clips.json')['clips'] if c['role']==role and (ROUTES/c['clip_id']).exists()]
+def clips(role):return [c for c in read(STUDY/'clips.json')['clips'] if in_role(c,role) and (ROUTES/c['clip_id']).exists()]
 def single_routes(clip):return {f.stem:read(f) for f in sorted((ROUTES/clip['clip_id']).glob('*.json')) if not f.stem.startswith('vote')}
 
 def matched(a,b):
@@ -151,12 +153,12 @@ def code_hashes():
     import hashlib
     return {f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(Path(__file__).parent.glob('study_*.py'))}
 
-def freeze(key):
+def freeze(key,role='sealed_test'):
     table=score_table('dev');cs=[c for c in clips('dev') if c['clip_id'] in table];feats={c['clip_id']:features(c) for c in cs}
     best,model=fit([c['clip_id'] for c in cs],table,feats,key)
-    test=[c['clip_id'] for c in read(STUDY/'clips.json')['clips'] if c['role']=='sealed_test' and all((STUDY/'perception'/c['clip_id']/f).exists() for f in ['dense_pose.json','racketvision/trajectory.json','tracknetv3/trajectory.json'])]
+    test=[c['clip_id'] for c in read(STUDY/'clips.json')['clips'] if in_role(c,role) and (role=='ae_test' or all((STUDY/'perception'/c['clip_id']/f).exists() for f in ['dense_pose.json','racketvision/trajectory.json','tracknetv3/trajectory.json']))]
     packet={'objective':key or 'hit','fixed_best':best,'learned':model.packet(),'dev_clips':[c['clip_id'] for c in cs],'test_clips':test,'policies_reported':['FIXED_BEST','RULE_ROUTER','CONSENSUS','LEARNED','ORACLE'],
-            'note':'All policies are reported on test; none is chosen by test outcome. Perception stopped early by user: test covers only clips with complete perception.','code_sha256':code_hashes()}
+            'test_role':role,'note':'All policies are reported on test; none is chosen by test outcome.','code_sha256':code_hashes()}
     target=STUDY/f'frozen_policy{SUFFIX}.json'
     if target.exists():raise ValueError('Policy already frozen')
     save(target,packet);return packet
@@ -186,7 +188,7 @@ if __name__=='__main__':
     a=argparse.ArgumentParser();a.add_argument('step',choices=['votes','evaluate','freeze','apply','report']);a.add_argument('--role',default='dev');a.add_argument('--objective',choices=['joint','hit'],default='joint');a=a.parse_args()
     if a.step=='votes':
         for c in clips(a.role):build_votes(c)
-    elif a.step=='freeze':print(json.dumps({k:v for k,v in freeze('type_' if a.objective=='joint' else '').items() if k!='learned'},ensure_ascii=False)[:600])
+    elif a.step=='freeze':print(json.dumps({k:v for k,v in freeze('type_' if a.objective=='joint' else '',a.role).items() if k!='learned'},ensure_ascii=False)[:600])
     elif a.step=='apply':print({k:len(v) for k,v in apply().items()})
     elif a.step=='report':
         r=report('type_' if a.objective=='joint' else '')

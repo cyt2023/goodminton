@@ -10,6 +10,7 @@ STUDY=ROOT.parent/'03_数据/独立基准/BFMD/pipeline_study'
 VARIANT=os.environ.get('BFMD_VARIANT','');SUFFIX=f'_{VARIANT}' if VARIANT else '';ROUTES=STUDY/f'routes{SUFFIX}'  # v2 = refined timing + filters
 CLASSIFIERS=['bst0','bst_cg_ap']
 
+from benchmarks.bfmd.rally_clips import in_role
 def read(p):return json.loads(Path(p).read_text())
 
 SERVES={'serve','serve_long'}
@@ -36,14 +37,14 @@ def score_route(route,clip,match):
     return rows
 
 def run(role):
-    if role=='sealed_test' and not (STUDY/f'frozen_policy{SUFFIX}.json').exists():raise ValueError('Freeze the selection policy before scoring sealed test clips')
+    if role in ('sealed_test','ae_test') and not (STUDY/f'frozen_policy{SUFFIX}.json').exists():raise ValueError('Freeze the selection policy before scoring sealed test clips')
     manifest=read(ROOT.parent/'03_数据/独立基准/BFMD/manifest.json');matches={m['match_id']:m for m in manifest['matches']};rows=[]
     for clip in read(STUDY/'clips.json')['clips']:
         folder=ROUTES/clip['clip_id']
-        if clip['role']!=role or not folder.exists():continue
+        if not in_role(clip,role) or not folder.exists():continue
         for f in sorted(folder.glob('*.json')):rows+=score_route(read(f),clip,matches[clip['match_id']])
     out=STUDY/f'scores_{role}{SUFFIX}.json';out.write_text(json.dumps(rows,ensure_ascii=False,indent=1));return rows
 
 if __name__=='__main__':
-    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test'],required=True);a=a.parse_args()
+    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test','ae_test'],required=True);a=a.parse_args()
     rows=run(a.role);print('SCORED',len(rows),flush=True)

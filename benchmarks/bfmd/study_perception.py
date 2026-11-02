@@ -6,6 +6,8 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 STUDY=ROOT.parent/'03_数据/独立基准/BFMD/pipeline_study'
 
+import sys;sys.path.insert(0,str(ROOT))
+from benchmarks.bfmd.rally_clips import in_role
 def read(p):return json.loads(Path(p).read_text())
 def save(p,v):Path(p).parent.mkdir(parents=True,exist_ok=True);Path(p).write_text(json.dumps(v,ensure_ascii=False,indent=2)+'\n')
 
@@ -28,7 +30,8 @@ def run(clip):
     save(folder/'cost.json',cost);return cost
 
 if __name__=='__main__':
-    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test'],required=True);a.add_argument('--limit',type=int);a=a.parse_args()
-    clips=[c for c in read(STUDY/'clips.json')['clips'] if c['role']==a.role and 'path' in c][:a.limit]
+    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test','ae_test'],required=True);a.add_argument('--limit',type=int);a.add_argument('--shard',default='0/1',help='i/n: process every n-th clip starting at i');a=a.parse_args()
+    clips=[c for c in read(STUDY/'clips.json')['clips'] if in_role(c,a.role) and 'path' in c][:a.limit]
+    i0,n=map(int,a.shard.split('/'));clips=clips[i0::n]
     for i,c in enumerate(clips):
         r=run(c);print('PERCEPTION',i+1,len(clips),c['clip_id'],json.dumps(r),flush=True)

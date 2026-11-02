@@ -15,6 +15,7 @@ VARIANT=os.environ.get('BFMD_VARIANT','');SUFFIX=f'_{VARIANT}' if VARIANT else '
 BALLS={'rv':'racketvision/trajectory.json','tn3':'tracknetv3/trajectory.json'}
 SHARED_METHODS=['rules','fusion','gru_shared','shf','hitnet','rgb_resnet']
 
+from benchmarks.bfmd.rally_clips import in_role
 def read(p):return json.loads(Path(p).read_text())
 def save(p,v):Path(p).parent.mkdir(parents=True,exist_ok=True);Path(p).write_text(json.dumps(v,ensure_ascii=False,indent=2,allow_nan=False)+'\n')
 def evidence(path):return {'artifact':str(path),'sha256':sha(path)}
@@ -76,6 +77,6 @@ def run(clip,allow_expensive,methods):
     return rows
 
 if __name__=='__main__':
-    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test'],required=True);a.add_argument('--methods',default=','.join(SHARED_METHODS));a.add_argument('--expensive',action='store_true');a.add_argument('--limit',type=int);a=a.parse_args()
-    clips=[c for c in read(STUDY/'clips.json')['clips'] if c['role']==a.role and 'path' in c][:a.limit]
+    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test','ae_test'],required=True);a.add_argument('--methods',default=','.join(SHARED_METHODS));a.add_argument('--expensive',action='store_true');a.add_argument('--limit',type=int);a=a.parse_args()
+    clips=[c for c in read(STUDY/'clips.json')['clips'] if in_role(c,a.role) and 'path' in c][:a.limit]
     for c in clips:run(c,a.expensive,a.methods.split(','))
