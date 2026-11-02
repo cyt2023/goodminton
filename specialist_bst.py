@@ -117,4 +117,5 @@ class SpecialistBST:
                     for i in np.argsort(-a)[:5]]
         return {'bst0': ranking(scores), 'bst_full': ranking(full_scores) if full_scores is not None else None,
                 'bst0_all_scores': scores.tolist(), 'class_labels': self.classes,
+                'bst_full_all_scores': full_scores.tolist() if full_scores is not None else None,
                 'score_note': 'Uncalibrated softmax of pretrained model on adapted inputs, not correctness probability.'}

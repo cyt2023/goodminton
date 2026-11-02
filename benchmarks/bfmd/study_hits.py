@@ -46,6 +46,10 @@ def classify(dense,ball,events,fps,corners):
             values,_=model.inputs({**e,'start_frame':lo,'end_frame':hi,'peak_time':dense['frames'][w]['source_time']});pred=model.predict(values)
             ranked=pred['bst_full'] if name=='bst_cg_ap' else pred['bst0']
             row['labels'][name]={'label':mainland(ranked[0]['label']),'raw':ranked[0]['label'],'score':ranked[0]['softmax_score']}
+            if VARIANT>='v3':  # BFMD taxonomy: summed class probabilities, serves excluded
+                from benchmarks.bfmd.bfmd_labels import bfmd_probs,bfmd_label
+                probs=bfmd_probs(pred['class_labels'],pred['bst_full_all_scores'] if name=='bst_cg_ap' else pred['bst0_all_scores'])
+                row['labels'][name].update(label=bfmd_label(probs),probs=probs)
         out.append(row)
     return out
 
