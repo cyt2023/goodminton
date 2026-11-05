@@ -8,7 +8,7 @@ ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
 from benchmarks.bfmd.evaluate import evaluate
 STUDY=ROOT.parent/'03_数据/独立基准/BFMD/pipeline_study'
 VARIANT=os.environ.get('BFMD_VARIANT','');SUFFIX=f'_{VARIANT}' if VARIANT else '';ROUTES=STUDY/f'routes{SUFFIX}'  # v2 = refined timing + filters
-CLASSIFIERS=['bst0','bst_cg_ap']
+CLASSIFIERS=['bst0','bst_cg_ap','agent','bst0_author_window']  # 'agent' only on agent routes
 
 from benchmarks.bfmd.rally_clips import in_role
 def read(p):return json.loads(Path(p).read_text())
@@ -26,7 +26,7 @@ def score_route(route,clip,match):
     near_serve=lambda t:any(abs(t+clip['offset_seconds']-s)<=.1+1e-6 for s in serves)
     route={**route,'hits':[h for h in route['hits'] if not near_serve(h['time'])]}
     for cls in CLASSIFIERS:
-        if route['status']=='completed' and route['hits'] and cls not in route['hits'][0]['labels']:continue
+        if cls not in (route['hits'][0]['labels'] if route['hits'] else {'bst0':0,'bst_cg_ap':0}):continue
         packet={'kind':'model_inference','mode':'end_to_end','match_id':clip['match_id'],'label_space':'canonical_mainland','time_base':{'unit':'seconds','offset_seconds':clip['offset_seconds']},
                 'evaluation_window':[0,clip['duration_seconds']],'provenance':{'model':f"{route['perception']}+{route['method']}+{cls}",'input_video_sha256':clip['sha256'],'annotation_inputs':[]},
                 'hits':[{'time':h['time'],'confidence':h.get('hit_score'),'label':h['labels'][cls]['label']} for h in route['hits']]}
