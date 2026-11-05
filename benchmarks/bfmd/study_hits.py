@@ -81,6 +81,6 @@ def run(clip,allow_expensive,methods):
     return rows
 
 if __name__=='__main__':
-    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test','ae_test'],required=True);a.add_argument('--methods',default=','.join(SHARED_METHODS));a.add_argument('--expensive',action='store_true');a.add_argument('--limit',type=int);a=a.parse_args()
+    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test','ae_test','new_test'],required=True);a.add_argument('--methods',default=','.join(SHARED_METHODS));a.add_argument('--expensive',action='store_true');a.add_argument('--limit',type=int);a=a.parse_args()
     clips=[c for c in read(STUDY/'clips.json')['clips'] if in_role(c,a.role) and 'path' in c][:a.limit]
     for c in clips:run(c,a.expensive,a.methods.split(','))

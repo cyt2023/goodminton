@@ -37,6 +37,7 @@ def score_route(route,clip,match):
     return rows
 
 def run(role):
+    if role=='new_test' and not (STUDY/f'frozen_verify{SUFFIX}.json').exists():raise ValueError('Freeze the verification agent before scoring new_test')
     if role in ('sealed_test','ae_test') and not (STUDY/f'frozen_policy{SUFFIX}.json').exists():raise ValueError('Freeze the selection policy before scoring sealed test clips')
     manifest=read(ROOT.parent/'03_数据/独立基准/BFMD/manifest.json');matches={m['match_id']:m for m in manifest['matches']};rows=[]
     for clip in read(STUDY/'clips.json')['clips']:
@@ -46,5 +47,5 @@ def run(role):
     out=STUDY/f'scores_{role}{SUFFIX}.json';out.write_text(json.dumps(rows,ensure_ascii=False,indent=1));return rows
 
 if __name__=='__main__':
-    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test','ae_test'],required=True);a=a.parse_args()
+    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test','ae_test','new_test'],required=True);a=a.parse_args()
     rows=run(a.role);print('SCORED',len(rows),flush=True)

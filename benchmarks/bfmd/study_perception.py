@@ -30,7 +30,7 @@ def run(clip):
     save(folder/'cost.json',cost);return cost
 
 if __name__=='__main__':
-    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test','ae_test'],required=True);a.add_argument('--limit',type=int);a.add_argument('--shard',default='0/1',help='i/n: process every n-th clip starting at i');a=a.parse_args()
+    a=argparse.ArgumentParser();a.add_argument('--role',choices=['dev','sealed_test','ae_test','new_test'],required=True);a.add_argument('--limit',type=int);a.add_argument('--shard',default='0/1',help='i/n: process every n-th clip starting at i');a=a.parse_args()
     clips=[c for c in read(STUDY/'clips.json')['clips'] if in_role(c,a.role) and 'path' in c][:a.limit]
     i0,n=map(int,a.shard.split('/'));clips=clips[i0::n]
     for i,c in enumerate(clips):

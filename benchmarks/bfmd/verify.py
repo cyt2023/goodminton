@@ -182,33 +182,67 @@ def fit(data):
         best=max(best,(f,th))
     return model,best[1]
 
-def evaluate():
+def write_route(c,kept,tmodel,th,note):
+    seq=[x for x,_ in kept];alt=author_window_probs(c,seq) if USE_ALT and seq else None
+    stacked=tmodel.predict([type_x(seq,j,alt) for j in range(len(seq))]) if seq else []
+    for x,a in zip(seq,alt or []):x['alt_bst0']=bfmd_label(a[0])
+    hits=[{'time':x['time'],'hit_score':v,'labels':{'bst0':{'label':label(x,'bst0')},'bst_cg_ap':{'label':label(x,'avg')},'agent':{'label':t},**({'bst0_author_window':{'label':x['alt_bst0']}} if 'alt_bst0' in x else {})}} for (x,v),t in zip(kept,stacked)]
+    save(ROUTES/c['clip_id']/'agent__verify.json',{'clip_id':c['clip_id'],'role':c['role'],'perception':'agent','method':'verify','status':'completed','hit_seconds':0.,'inputs':{},
+         'note':note+' label slots: bst0 = BST-0 only, bst_cg_ap = averaged BST-0/CG-AP, agent = stacked type re-check','threshold':th,'hits':hits,'annotation_inputs':[]})
+    return len(hits)
+
+def keep(model,th,cs):
+    s=model.predict([x['x'] for x in cs]) if cs else []
+    return [(x,float(v)) for x,v,k in zip(cs,s,np.asarray(s)>=th) if k]
+
+def fit_both(train,data,types,byid):
+    """Hit keep/drop model, then type model on kept+matched+typed candidates of the training clips."""
+    model,th=fit([data[k] for k in train]);X=[];Y=[]
+    for k in train:
+        seq=[x for x,_ in keep(model,th,data[k][0])];ty={id(x):t for x,t in zip(data[k][0],types[k])};alt=author_window_probs(byid[k],seq) if USE_ALT and seq else None
+        for j,x in enumerate(seq):
+            if ty.get(id(x)):X.append(type_x(seq,j,alt));Y.append(ty[id(x)])
+    return model,th,Softmax().fit(X,Y)
+
+def dev_data():
     clips=[c for c in read(STUDY/'clips.json')['clips'] if in_role(c,'dev') and (ROUTES/c['clip_id']).exists()]
-    data={c['clip_id']:(cs:=candidates(c),truth_labels(c,cs)) for c in clips};out={}
-    types={c['clip_id']:truth_types(c,data[c['clip_id']][0]) for c in clips};byid={c['clip_id']:c for c in clips}
+    data={c['clip_id']:(cs:=candidates(c),truth_labels(c,cs)) for c in clips}
+    return clips,data,{c['clip_id']:truth_types(c,data[c['clip_id']][0]) for c in clips},{c['clip_id']:c for c in clips}
+
+def evaluate():
+    clips,data,types,byid=dev_data();out={}
     for m in sorted({c['youtube_id'] for c in clips}):
-        train=[c['clip_id'] for c in clips if c['youtube_id']!=m];model,th=fit([data[k] for k in train])
-        kept={}
+        model,th,tmodel=fit_both([c['clip_id'] for c in clips if c['youtube_id']!=m],data,types,byid)
         for c in clips:
-            cs,_=data[c['clip_id']];s=model.predict([x['x'] for x in cs]) if cs else []
-            kept[c['clip_id']]=[(x,float(v)) for x,v,keep in zip(cs,s,np.asarray(s)>=th) if keep]
-        X=[];Y=[]
-        for k in train:  # type model trained on kept, matched, typed candidates of other matches
-            seq=[x for x,_ in kept[k]];ty={id(x):t for x,t in zip(data[k][0],types[k])};alt=author_window_probs(byid[k],seq) if USE_ALT else None
-            for j,x in enumerate(seq):
-                if ty.get(id(x)):X.append(type_x(seq,j,alt));Y.append(ty[id(x)])
-        tmodel=Softmax().fit(X,Y)
-        for c in clips:
-            if c['youtube_id']!=m:continue
-            seq=[x for x,_ in kept[c['clip_id']]];alt=author_window_probs(c,seq) if USE_ALT and seq else None
-            stacked=tmodel.predict([type_x(seq,j,alt) for j in range(len(seq))]) if seq else []
-            for x,a in zip(seq,alt or []):x['alt_bst0']=bfmd_label(a[0])
-            hits=[{'time':x['time'],'hit_score':v,'labels':{'bst0':{'label':label(x,'bst0')},'bst_cg_ap':{'label':label(x,'avg')},'agent':{'label':t},**({'bst0_author_window':{'label':x['alt_bst0']}} if 'alt_bst0' in x else {})}} for (x,v),t in zip(kept[c['clip_id']],stacked)]
-            save(ROUTES/c['clip_id']/'agent__verify.json',{'clip_id':c['clip_id'],'role':c['role'],'perception':'agent','method':'verify','status':'completed','hit_seconds':0.,'inputs':{},
-                 'note':'leave-one-match-out. label slots: bst0 = BST-0 only, bst_cg_ap = averaged BST-0/CG-AP, agent = stacked type re-check (BST probs + flight + rally context)','threshold':th,'hits':hits,'annotation_inputs':[]})
-            out[c['clip_id']]=len(hits)
-    full,th=fit(list(data.values()));save(STUDY/f'verify_model_{VARIANT}.json',{'model':full.packet(),'threshold':th,'features':['primary','support','turn','speed','bst_top','bst_margin','bst_agree','pose','gap','hit_score'],'primary':PRIMARY,'add_support':ADD_SUPPORT})
+            if c['youtube_id']==m:out[c['clip_id']]=write_route(c,keep(model,th,data[c['clip_id']][0]),tmodel,th,'leave-one-match-out.')
+    return out
+
+def code_hashes():
+    import hashlib
+    here=Path(__file__).parent
+    return {f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(here.glob('*.py'))}
+
+FROZEN=STUDY/f'frozen_verify_{VARIANT}.json'
+def freeze():
+    if FROZEN.exists():raise ValueError('Verification agent already frozen')
+    clips,data,types,byid=dev_data();model,th,tmodel=fit_both(list(byid),data,types,byid)
+    save(FROZEN,{'dev_clips':sorted(byid),'hit_model':model.packet(),'threshold':th,'type_model':{'W':tmodel.W.tolist(),'mu':tmodel.mu.tolist(),'sd':tmodel.sd.tolist()},
+                 'types':TYPES,'primary':PRIMARY,'add_support':ADD_SUPPORT,'use_author_window':USE_ALT,'code_sha256':code_hashes(),
+                 'note':'Fitted on all dev clips before the new test rallies were sampled. Applied unchanged to new_test.'})
+    return th
+
+def apply(role):
+    f=read(FROZEN)
+    if f['code_sha256']!=code_hashes():raise ValueError('Agent code changed after freezing')
+    model=Logistic();model.w,model.mu,model.sd=(np.array(f['hit_model'][k]) for k in ['w','mu','sd'])
+    tmodel=Softmax();tmodel.W,tmodel.mu,tmodel.sd=(np.array(f['type_model'][k]) for k in ['W','mu','sd'])
+    out={}
+    for c in read(STUDY/'clips.json')['clips']:
+        if in_role(c,role) and (ROUTES/c['clip_id']).exists():out[c['clip_id']]=write_route(c,keep(model,f['threshold'],candidates(c)),tmodel,f['threshold'],'frozen agent (fitted on all dev clips).')
     return out
 
 if __name__=='__main__':
-    print(len(evaluate()),'dev clips verified (leave-one-match-out)')
+    a=argparse.ArgumentParser();a.add_argument('step',choices=['evaluate','freeze','apply'],nargs='?',default='evaluate');a.add_argument('--role',default='new_test');a=a.parse_args()
+    if a.step=='evaluate':print(len(evaluate()),'dev clips verified (leave-one-match-out)')
+    elif a.step=='freeze':print('frozen, threshold',freeze())
+    else:print(len(apply(a.role)),'clips verified by the frozen agent')
