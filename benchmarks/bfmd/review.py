@@ -47,7 +47,7 @@ class Rally:
         self.clip,self.tmodel,self.trans,self.lam=clip,tmodel,trans,lam
         self.c=cached_candidates(clip);self.y=truth_labels(clip,self.c);self.ty=truth_types(clip,self.c);self.n_typed=typed_truth_count(clip)
         p=model.predict([x['x'] for x in self.c]) if self.c else []
-        for x,v in zip(self.c,p):x.update(p_hit=float(v),inlog=bool(v>=th),locked=False,clamp=None,label=None,tp=None,odds=1.)
+        for x,v in zip(self.c,p):x.update(p_hit=float(v),inlog=bool(v>=th),locked=False,clamp=None,label=None,tp=None,odds=1.,racket=x['x'][10])
         self.decode()
 
     def log(self):return [x for x in self.c if x['inlog']]
@@ -134,7 +134,8 @@ def priority(r,x,policy,em=None):
     if x['inlog']:
         pf=up(1-x['p_hit']);pt=up(1-max(x['post']))
         return (pf*GAIN['false']+(1-pf)*pt*GAIN['type'])/COST['hit']
-    return up(x['p_hit'])*GAIN['miss']/COST['miss']
+    pm=float(em['miss'].predict([[x['p_hit'],x['racket']]])[0]) if em and em.get('miss') else x['p_hit']  # racket contact evidence for missed hits
+    return up(pm)*GAIN['miss']/COST['miss']
 
 def simulate(rallies,policy,em=None,propagate=False):
     """em: {'lr': {True: odds factor if the reviewed item was wrong, False: if right}} for suspicion propagation."""
@@ -191,11 +192,17 @@ def suspicion_lr(rallies):
     odds=lambda w,t:(w+1)/(t-w+1);b=odds(*base)
     return {k:odds(*v)/b for k,v in n.items()}
 
+def miss_model(rallies):
+    """P(real hit) for candidates left out of the log, from confidence + racket contact (training clips)."""
+    X=[[x['p_hit'],x['racket']] for r in rallies for x,y in zip(r.c,r.y) if not x['inlog'] and y is not None]
+    Y=[float(y==1) for r in rallies for x,y in zip(r.c,r.y) if not x['inlog'] and y is not None]
+    return Logistic().fit(X,Y,l2=1.)
+
 def run_fold(train_clips,test_clips,model,th,tmodel,lam):
     flat=np.full((len(TYPES),len(TYPES)),1/len(TYPES))
-    tr=[Rally(c,model,th,tmodel,flat,0) for c in train_clips];T=transitions(tr);lr={'lr':suspicion_lr(tr)};out={'_lr':lr['lr']}
+    tr=[Rally(c,model,th,tmodel,flat,0) for c in train_clips];T=transitions(tr);lr={'lr':suspicion_lr(tr)};mm=miss_model(tr);out={'_lr':lr['lr']}
     for name,pol,em,prop,l in [('chronological','chronological',None,False,0),('confidence','confidence',None,False,0),('gain','gain',None,False,0),
-                               ('gain+suspicion','gain',lr,False,0),('gain+suspicion+context','gain',lr,True,0),('oracle','oracle',None,False,0)]:
+                               ('gain+suspicion+context','gain',lr,True,0),('gain+racket','gain',{'miss':mm},False,0),('gain+racket+suspicion+context','gain',{**lr,'miss':mm},True,0),('oracle','oracle',None,False,0)]:
         out[name]=simulate([Rally(c,model,th,tmodel,T,l) for c in test_clips],pol,em,prop)
     return out
 
@@ -217,7 +224,7 @@ if __name__=='__main__':
         print('share         ',' '.join(f'{g:5.2f}' for g in GRID))
         for k,v in res.items():print(f"{k:14s}",' '.join(f'{x:.3f}' for x in v))
     else:
-        f=read(STUDY/'frozen_verify_v3.json')
+        f=read(STUDY/'frozen_verify_v3_racket.json')
         model=Logistic();model.w,model.mu,model.sd=(np.array(f['hit_model'][k]) for k in ['w','mu','sd'])
         tmodel=Softmax();tmodel.W,tmodel.mu,tmodel.sd=(np.array(f['type_model'][k]) for k in ['W','mu','sd'])
         test=[c for c in read(STUDY/'clips.json')['clips'] if in_role(c,'new_test')]
