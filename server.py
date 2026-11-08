@@ -214,6 +214,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json_response({'error':str(error)},400)
             except (OSError,RuntimeError):
                 return self.json_response({'error':'击球片段暂时无法生成'},500)
+        if path == '/api/review' or path.startswith('/api/review/') or path.startswith('/review-video/'):
+            try:
+                from benchmarks.bfmd import review_web
+                if path == '/api/review':return self.json_response(review_web.listing())
+                if path.startswith('/review-video/'):return self.serve_media(review_web.video(path.removeprefix('/review-video/')))
+                return self.json_response(review_web.state(path.removeprefix('/api/review/')))
+            except (ValueError,FileNotFoundError) as error:return self.json_response({'error':str(error)},400)
         if path == '/api/state':
             return self.json_response(records())
         if path == '/api/video-workflows':
@@ -381,8 +388,8 @@ class Handler(BaseHTTPRequestHandler):
             if not file.is_file():
                 return self.json_response({'error':'东京决赛检查结果尚未生成'},404)
             return self.json_response(json.loads(file.read_text()))
-        if path in ['/', '/index.html', '/conversation', '/research', '/research.html', '/specialist', '/label-strokes', '/tokyo-check', '/court-review', '/analysis']:
-            file = ROOT / 'static' / ('analysis.html' if path=='/analysis' else 'court_review.html' if path == '/court-review' else 'conversation.html' if path == '/conversation' else 'tokyo_check.html' if path == '/tokyo-check' else 'label_strokes.html' if path == '/label-strokes' else 'specialist.html' if path == '/specialist' else 'research.html' if path.startswith('/research') else 'index.html')
+        if path in ['/', '/index.html', '/conversation', '/research', '/research.html', '/specialist', '/label-strokes', '/tokyo-check', '/court-review', '/analysis', '/review']:
+            file = ROOT / 'static' / ('review.html' if path=='/review' else 'analysis.html' if path=='/analysis' else 'court_review.html' if path == '/court-review' else 'conversation.html' if path == '/conversation' else 'tokyo_check.html' if path == '/tokyo-check' else 'label_strokes.html' if path == '/label-strokes' else 'specialist.html' if path == '/specialist' else 'research.html' if path.startswith('/research') else 'index.html')
             data = file.read_text().replace('__SESSION_TOKEN__', TOKEN).encode()
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
@@ -497,6 +504,10 @@ class Handler(BaseHTTPRequestHandler):
             if length > 1024 * 1024:
                 return self.json_response({'error': '标注内容过大'}, 413)
             body = json.loads(self.rfile.read(length))
+            if parsed.path.startswith('/api/review/'):
+                from benchmarks.bfmd import review_web
+                clip=parsed.path.removeprefix('/api/review/')
+                return self.json_response(review_web.reset(clip) if body.get('reset') else review_web.act(clip,body))
             if parsed.path.startswith('/api/integrated-analysis/'):
                 parts=parsed.path.removeprefix('/api/integrated-analysis/').split('/')
                 job=parts[0];research_jobs.folder_for(job)

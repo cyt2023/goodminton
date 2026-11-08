@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>比赛快速核对 · 羽球研习</title>
+<style>
+:root{--ink:#213d32;--muted:#6d7e73;--line:#dce4d7;--pale:#edf2e8;--green:#315b44;--warn:#c9822b;--bad:#b4472f;--good:#4f8a5b}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:#f8faf5;color:var(--ink);font:15px/1.55 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+main{max-width:1280px;margin:auto;padding:18px 22px 50px}
+h1{font-size:24px;margin:4px 0}h2{font-size:16px;margin:0 0 8px}h3{font-size:14px;margin:12px 0 6px;color:var(--muted);font-weight:600}
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+select,button{font:inherit;color:var(--ink);border:1px solid var(--line);border-radius:10px;background:#fff;padding:7px 11px;cursor:pointer}
+button:hover{background:var(--pale)}button:disabled{opacity:.45;cursor:default}
+button:focus-visible,select:focus-visible{outline:3px solid #7e9f6f;outline-offset:2px}
+.primary{background:var(--green);color:#fff;border:0;font-weight:600}.primary:hover{background:#254b37}
+.danger{color:var(--bad);border-color:#e6c3b8}
+.stats{display:flex;flex-wrap:wrap;gap:18px;margin:12px 0;font-size:14px}
+.stat b{font-size:20px;display:block;line-height:1.2}
+.grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(330px,1fr);gap:18px;align-items:start}
+.panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+video{display:block;width:100%;border-radius:12px;background:#183126;aspect-ratio:16/9}
+#timeline{width:100%;display:block;margin-top:10px}
+.queue{list-style:none;margin:0;padding:0;max-height:250px;overflow:auto}
+.queue li{display:flex;justify-content:space-between;gap:8px;padding:7px 9px;border-radius:9px;cursor:pointer;border:1px solid transparent}
+.queue li:hover{background:var(--pale)}.queue li.sel{border-color:#6d8c61;background:#eef4ea}
+.chip{font-size:12px;padding:1px 8px;border-radius:999px;background:#f6efe1;color:#72542c;white-space:nowrap}
+.chip.miss{background:#e9eef7;color:#334f7c}.chip.type{background:#f3e7ef;color:#6b3a5a}
+.prob{display:flex;align-items:center;gap:8px;font-size:13px;margin:3px 0}
+.prob .track{flex:1;height:8px;background:var(--pale);border-radius:4px;overflow:hidden}.prob .fill{height:100%;background:var(--warn)}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.cand{font-size:12px}.cand div{display:flex;justify-content:space-between}
+.cand .lab{font-weight:600;font-size:12px;color:var(--muted);margin-bottom:2px}
+.dets{display:flex;flex-wrap:wrap;gap:4px}.det{font-size:11px;padding:1px 6px;border-radius:6px;background:#eee;color:#888}.det.on{background:#dcebdc;color:#2f6a3c}
+.types{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px}
+.types button{font-size:13px;padding:6px}
+.context{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.muted{color:var(--muted);font-size:13px}#err{color:var(--bad);min-height:20px}
+.ref{font-size:13px;padding:6px 10px;border-radius:8px;background:#f1f5f9;color:#334155}
+@media(max-width:900px){.grid{grid-template-columns:1fr}main{padding:14px 16px}}
+</style>
+</head>
+<body>
+<main>
+<div class="top">
+  <div><h1>比赛快速核对</h1><p class="muted">系统先自动记下每一拍，你只需核对它最没把握的几拍，其余会随之更新。</p></div>
+  <div class="bar">
+    <select id="clip" aria-label="选择回合"></select>
+    <label class="muted"><input type="checkbox" id="research"> 研究模式</label>
+    <button id="reset" class="danger">重新开始</button>
+  </div>
+</div>
+<div class="stats">
+  <div class="stat"><b id="sReviewed">0</b>已核对</div>
+  <div class="stat"><b id="sSeconds">0 秒</b>估计用时</div>
+  <div class="stat"><b id="sExpected">–</b>预计剩余错误（拍）</div>
+  <div class="stat"><b id="sLog">–</b>记录中的击球</div>
+  <div class="stat ref" id="sRef" hidden></div>
+</div>
+<div id="err" role="alert"></div>
+<div class="grid">
+  <section class="panel">
+    <video id="video" controls muted playsinline></video>
+    <svg id="timeline" role="img" aria-label="证据时间轴"></svg>
+    <p class="muted">上排圆点是系统记下的击球（绿色可信，橙红可疑，虚线圈为可能漏掉的击球，带 ✓ 为已核对）；下面每一行是一个找拍器报的击球。点圆点可跳到那一拍。</p>
+  </section>
+  <section>
+    <div class="panel">
+      <h2>先看这几拍</h2>
+      <ol class="queue" id="queue"></ol>
+    </div>
+    <div class="panel" id="evidence" style="margin-top:14px" hidden>
+      <h2 id="evTitle"></h2>
+      <div id="evProbs"></div>
+      <h3>多少个找拍器同意这里有一拍</h3>
+      <div id="evDets" class="dets"></div>
+      <h3>球种候选</h3>
+      <div class="cols" id="evCands"></div>
+      <h3>击球前后的球路（红点为判定的击球时刻）</h3>
+      <svg id="evPath" width="100%" height="110" role="img" aria-label="球路"></svg>
+      <div class="context" id="evContext"></div>
+      <h3>你的判断</h3>
+      <div class="bar" id="evActions"></div>
+      <div class="types" id="evTypes"></div>
+      <p class="muted">快捷键：Enter 判断正确 · X 不是击球 · 空格重播这一拍</p>
+    </div>
+  </section>
+</div>
+</main>
+<script>
+const token='__SESSION_TOKEN__',$=id=>document.getElementById(id);
+const NAMES={clear:'高远',lift:'挑球',drop:'吊球',smash:'杀球',drive:'平抽',push:'推球',net_kill:'扑球',net:'网前',defense:'挡网/防守',serve:'发球',serve_long:'发高远'};
+const RNAMES={rules:'规则',fusion:'声画',gru_shared:'GRU',shf:'SHF',hitnet:'HitNet',rgb_resnet:'RGB'};
+const nm=t=>NAMES[t]||t||'未知';
+let S=null,sel=null,loop=null;
+async function api(path,body){const r=await fetch(path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json','X-Session-Token':token},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.error||'暂时无法读取');return d}
+function risk(e){return e.inlog?(e.p_false||0)+(1-(e.p_false||0))*(e.p_type||0):(e.p_real||0)}
+function color(e){if(e.locked)return '#315b44';const p=risk(e);return p<.2?'#4f8a5b':p<.45?'#c9822b':'#b4472f'}
+async function loadClips(){const d=await api('/api/review');const c=$('clip');d.clips.sort((a,b)=>(a.role===b.role?0:a.role==='new_test'?-1:1));
+  c.innerHTML=d.clips.map(x=>`<option value="${x.clip_id}">${x.role==='new_test'?'新回合':'开发'} · ${x.match.split('-').slice(-6).join(' ')} · ${x.duration}s${x.reviewed?' · 已核对'+x.reviewed:''}</option>`).join('');
+  const want=new URLSearchParams(location.search).get('clip');if(want)c.value=want;await load()}
+async function load(){$('err').textContent='';$('evidence').hidden=true;sel=null;$('sExpected').textContent='加载中…';
+  try{S=await api('/api/review/'+$('clip').value);$('video').src=S.clip.video;render()}catch(e){$('err').textContent=e.message}}
+function render(){$('sReviewed').textContent=S.reviewed;$('sSeconds').textContent=S.review_seconds+' 秒';$('sExpected').textContent=S.expected_errors;$('sLog').textContent=S.log_size;
+  $('sRef').hidden=!$('research').checked;$('sRef').textContent=`与 BFMD 参考答案对比：联合 F1 = ${S.reference.joint_f1}`;
+  const q=S.queue.slice(0,8).map(i=>S.items[i]);
+  $('queue').innerHTML=q.length?q.map(e=>`<li data-i="${e.index}" class="${sel===e.index?'sel':''}"><span>${e.time.toFixed(1)}s · ${e.inlog?nm(e.label):'可能漏掉的一拍'}</span><span class="chip ${e.inlog?(e.reason==='球种可能判错'?'type':''):'miss'}">${e.reason}</span></li>`).join(''):'<li>没有需要核对的了</li>';
+  $('queue').querySelectorAll('li[data-i]').forEach(li=>li.onclick=()=>select(+li.dataset.i));
+  drawTimeline();if(sel!==null)showEvidence()}
+function drawTimeline(){const svg=$('timeline'),W=svg.clientWidth||800,rows=Object.keys(S.routes),H=46+rows.length*12+18,L=86;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('height',H);
+  const x=t=>L+(W-L-10)*t/S.clip.duration;let h='';
+  rows.forEach((r,k)=>{const y=52+k*12,[p,m]=r.split('__');h+=`<text x="${L-6}" y="${y+3}" font-size="9" text-anchor="end" fill="#6d7e73">${p==='tn3'?'TNv3':'RV'} ${RNAMES[m]||m}</text>`;
+    S.routes[r].forEach(t=>h+=`<circle cx="${x(t)}" cy="${y}" r="2.6" fill="${p==='tn3'?'#3f5f8f':'#7a9cc6'}"/>`)});
+  S.items.forEach(e=>{const cx=x(e.time),c=color(e);h+=`<line x1="${cx}" x2="${cx}" y1="30" y2="${H-14}" stroke="#e3e9df"/>`;
+    h+=`<g data-i="${e.index}" style="cursor:pointer"><circle cx="${cx}" cy="22" r="${sel===e.index?10:8}" fill="${e.inlog?c:'#fff'}" stroke="${e.inlog?'#fff':c}" stroke-width="2" ${e.inlog?'':'stroke-dasharray="3 2"'}/>${e.locked?`<text x="${cx}" y="26" font-size="11" text-anchor="middle" fill="#fff">✓</text>`:''}</g>`});
+  h+=`<text x="${L-6}" y="25" font-size="10" text-anchor="end" fill="#213d32">记录</text><line id="playhead" x1="${L}" x2="${L}" y1="8" y2="${H-14}" stroke="#b4472f" stroke-width="1.5"/>`;
+  for(let t=0;t<=S.clip.duration;t+=2)h+=`<text x="${x(t)}" y="${H-3}" font-size="9" text-anchor="middle" fill="#6d7e73">${t}s</text>`;
+  svg.innerHTML=h;svg.querySelectorAll('g[data-i]').forEach(g=>g.onclick=()=>select(+g.dataset.i))}
+function select(i){sel=i;const e=S.items[i];play(e.time);render();$('evidence').scrollIntoView({block:'nearest'})}
+function play(t){const v=$('video');clearInterval(loop);v.currentTime=Math.max(0,t-1.2);v.play().catch(()=>{});loop=setInterval(()=>{if(v.currentTime>=t+.8){v.pause();clearInterval(loop)}},50)}
+function bars(list){return list.map(([k,p])=>`<div><span>${nm(k)}</span><span>${Math.round(p*100)}%</span></div>`).join('')||'<div class="muted">无</div>'}
+function showEvidence(){const e=S.items[sel];$('evidence').hidden=false;
+  const seq=S.items.filter(x=>x.inlog).sort((a,b)=>a.time-b.time),pos=seq.findIndex(x=>x.index===e.index),prev=seq.filter(x=>x.time<e.time).pop(),next=seq.find(x=>x.time>e.time);
+  $('evTitle').innerHTML=`${e.time.toFixed(2)}s · ${e.inlog?`第 ${pos+1} 拍，判为「${nm(e.label)}」`:'可能漏掉的一拍'} · ${e.hitter==='near'?'近端':'远端'}球员 ${e.locked?'<span class="chip">已核对</span>':e.reason?`<span class="chip">${e.reason}</span>`:''}`;
+  const P=(t,p)=>p==null?'':`<div class="prob"><span style="width:118px">${t}</span><span class="track"><span class="fill" style="display:block;width:${Math.round(p*100)}%"></span></span><span>${Math.round(p*100)}%</span></div>`;
+  $('evProbs').innerHTML=e.inlog?P('不是击球的可能',e.p_false)+P('球种判错的可能',e.p_type):P('确实有一拍的可能',e.p_real);
+  $('evDets').innerHTML=`<span class="muted" style="width:100%">${Object.keys(e.detectors).length} 个找拍器中 ${e.support} 个在这里报了击球</span>`+Object.entries(e.detectors).map(([k,v])=>{const[p,m]=k.split('__');return `<span class="det ${v?'on':''}">${p==='tn3'?'TNv3':'RV'} ${RNAMES[m]||m}</span>`}).join('');
+  $('evCands').innerHTML=`<div class="cand"><div class="lab">综合判断</div>${bars(e.stacked)}</div><div class="cand"><div class="lab">BST（原窗口）</div>${bars(e.bst0)}</div><div class="cand"><div class="lab">BST（按作者规则）</div>${bars(e.author_window)}</div>`;
+  drawPath(e);$('evContext').innerHTML=`<span>上一拍：${prev?nm(prev.label)+' · '+(e.time-prev.time).toFixed(1)+'s 前':'无'}</span><span>下一拍：${next?nm(next.label)+' · '+(next.time-e.time).toFixed(1)+'s 后':'无'}</span>`;
+  const A=$('evActions'),T=$('evTypes');A.innerHTML='';T.innerHTML='';
+  if(e.locked){A.innerHTML='<span class="muted">这一拍已核对。</span>';return}
+  if(e.inlog){A.innerHTML=`<button class="primary" id="aOk">判断正确 ✓</button><button class="danger" id="aNo">不是击球</button><span class="muted">或改成：</span>`;$('aOk').onclick=()=>send('confirm');$('aNo').onclick=()=>send('reject')}
+  else{A.innerHTML=`<button class="danger" id="aNo">没有漏拍</button><span class="muted">确实漏了，球种是：</span>`;$('aNo').onclick=()=>send('dismiss')}
+  T.innerHTML=S.types.map(t=>`<button data-t="${t}" ${t===e.label&&e.inlog?'disabled':''}>${nm(t)}</button>`).join('');
+  T.querySelectorAll('button').forEach(b=>b.onclick=()=>send(e.inlog?'retype':'add',b.dataset.t))}
+function drawPath(e){const svg=$('evPath'),W=svg.clientWidth||320,H=110,pts=e.path.map((p,k)=>p&&[k,p[0],p[1]]).filter(Boolean);
+  if(pts.length<2){svg.innerHTML='<text x="10" y="55" font-size="12" fill="#6d7e73">这段时间没有检测到球。</text>';return}
+  const xs=pts.map(p=>p[1]),ys=pts.map(p=>p[2]),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys),s=Math.min((W-20)/Math.max(1,x1-x0),(H-20)/Math.max(1,y1-y0));
+  const X=v=>10+(v-x0)*s,Y=v=>10+(v-y0)*s,c=e.frame-e.path_start;let h='';
+  pts.forEach((p,i)=>{if(i)h+=`<line x1="${X(pts[i-1][1])}" y1="${Y(pts[i-1][2])}" x2="${X(p[1])}" y2="${Y(p[2])}" stroke="${p[0]<=c?'#7a9cc6':'#315b44'}" stroke-width="2"/>`});
+  const hit=pts.reduce((a,p)=>Math.abs(p[0]-c)<Math.abs(a[0]-c)?p:a);h+=`<circle cx="${X(hit[1])}" cy="${Y(hit[2])}" r="5" fill="#b4472f"/>`;
+  h+=`<text x="${W-8}" y="${H-4}" font-size="10" text-anchor="end" fill="#6d7e73">蓝：击球前 · 绿：击球后</text>`;svg.innerHTML=h}
+async function send(action,label){try{const i=sel;S=await api('/api/review/'+$('clip').value,{index:i,action,label});const nxt=S.queue[0];sel=nxt??null;render();if(nxt!==undefined)play(S.items[nxt].time)}catch(e){$('err').textContent=e.message}}
+$('clip').onchange=()=>{history.replaceState(null,'','?clip='+$('clip').value);load()};
+$('research').onchange=()=>S&&render();
+$('reset').onclick=async()=>{if(!confirm('清空这个回合的核对记录？'))return;S=await api('/api/review/'+$('clip').value,{reset:true});sel=null;$('evidence').hidden=true;render()};
+$('video').ontimeupdate=()=>{const ph=document.getElementById('playhead');if(!ph||!S)return;const W=$('timeline').clientWidth,L=86,x=L+(W-L-10)*$('video').currentTime/S.clip.duration;ph.setAttribute('x1',x);ph.setAttribute('x2',x)};
+document.addEventListener('keydown',ev=>{if(sel===null||ev.target.tagName==='SELECT')return;const e=S.items[sel];if(e.locked)return;
+  if(ev.key==='Enter'&&e.inlog){ev.preventDefault();send('confirm')}else if((ev.key==='x'||ev.key==='X')){send(e.inlog?'reject':'dismiss')}else if(ev.key===' '){ev.preventDefault();play(e.time)}});
+window.onresize=()=>S&&render();
+loadClips().catch(e=>$('err').textContent=e.message);
+</script>
+</body>
+</html>
