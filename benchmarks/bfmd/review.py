@@ -41,6 +41,23 @@ def typed_truth_count(clip):
     lo=clip['offset_seconds'];hi=lo+clip['duration_seconds']
     return sum(1 for h in m['hits'] if lo<=h['time']<hi and h['label'] in TYPES)
 
+_BST={}
+def side_top(clip,frames):
+    """BST-0 probability mass on far-player ('Top_') classes, author window bounded by the given neighbouring hit frames."""
+    from specialist_bst import SpecialistBST
+    k=clip['clip_id']
+    if k not in _BST:
+        pf=STUDY/'perception'/k;d=read(pf/'dense_pose.json');_BST[k]=(d,SpecialistBST(d,read(pf/'tracknetv3/trajectory.json'),None),{})
+    d,m,cache=_BST[k];n=len(d['frames']);out=[]
+    for j,f in enumerate(frames):
+        prev=frames[j-1] if j and f-frames[j-1]<=75 else None;nxt=frames[j+1] if j+1<len(frames) and frames[j+1]-f<=75 else None
+        lo=max(prev if prev is not None else f-15,f-45,0);hi=min((nxt+7) if nxt is not None else f+15,f+45+7,n-1)
+        if (f,lo,hi) not in cache:
+            v,_=m.inputs({'frame_index':f,'start_frame':lo,'end_frame':hi,'peak_time':d['frames'][f]['source_time']});p=m.predict(v)
+            cache[(f,lo,hi)]=float(sum(sc for cl,sc in zip(p['class_labels'],p['bst0_all_scores']) if cl.startswith('Top')))
+        out.append(cache[(f,lo,hi)])
+    return out
+
 class Rally:
     """One clip: candidates, current log state and decoding."""
     def __init__(self,clip,model,th,tmodel,trans,lam):
@@ -71,6 +88,18 @@ class Rally:
             b[t]=link@(em[t+1]*b[t+1]);b[t]/=b[t].sum()
         post=f*b;post/=post.sum(1,keepdims=True)
         for x,q in zip(seq,post):x['post']=q;x['label']=x['clamp'] or TYPES[int(q.argmax())]
+        self.parity()
+
+    def parity(self):
+        """Alternation violation: probability that a logged hit and an adjacent one (<=2.5 s) were played by the same player."""
+        seq=self.log()
+        if not seq:return
+        top=side_top(self.clip,[x['frame'] for x in seq])
+        for j,x in enumerate(seq):
+            v=0.
+            for i in (j-1,j+1):
+                if 0<=i<len(seq) and abs(seq[i]['time']-x['time'])<=2.5:v=max(v,top[j]*top[i]+(1-top[j])*(1-top[i]))
+            x['viol']=v
 
     def features(self,x):
         """Evidence for the error models (multi-detector agreement, physics, classifiers, rally rhythm)."""
@@ -133,6 +162,9 @@ def priority(r,x,policy,em=None):
     up=lambda q:x['odds']*q/(1-q+1e-9)/(1+x['odds']*q/(1-q+1e-9))  # suspicion from reviewed neighbours
     if x['inlog']:
         pf=up(1-x['p_hit']);pt=up(1-max(x['post']))
+        if em and em.get('parity'):  # rally structure: same-player neighbours raise the error odds by a learned factor
+            g=float(np.exp(em['parity'].w[2]/em['parity'].sd[1]*x.get('viol',0.)))
+            o=lambda q:g*q/(1-q+1e-9)/(1+g*q/(1-q+1e-9));pf,pt=o(pf),o(pt)
         return (pf*GAIN['false']+(1-pf)*pt*GAIN['type'])/COST['hit']
     pm=float(em['miss'].predict([[x['p_hit'],x['racket']]])[0]) if em and em.get('miss') else x['p_hit']  # racket contact evidence for missed hits
     return up(pm)*GAIN['miss']/COST['miss']
@@ -198,11 +230,19 @@ def miss_model(rallies):
     Y=[float(y==1) for r in rallies for x,y in zip(r.c,r.y) if not x['inlog'] and y is not None]
     return Logistic().fit(X,Y,l2=1.)
 
+def parity_model(rallies):
+    """P(logged hit is wrong) from confidence and alternation violation (training clips)."""
+    X=[];Y=[]
+    for r in rallies:
+        for k,x in enumerate(r.c):
+            if x['inlog'] and r.y[k] is not None:X.append([1-min(x['p_hit'],max(x['post'])),x.get('viol',0.)]);Y.append(float(r.wrong(k)))
+    return Logistic().fit(X,Y,l2=1.)
+
 def run_fold(train_clips,test_clips,model,th,tmodel,lam):
     flat=np.full((len(TYPES),len(TYPES)),1/len(TYPES))
-    tr=[Rally(c,model,th,tmodel,flat,0) for c in train_clips];T=transitions(tr);lr={'lr':suspicion_lr(tr)};mm=miss_model(tr);out={'_lr':lr['lr']}
+    tr=[Rally(c,model,th,tmodel,flat,0) for c in train_clips];T=transitions(tr);lr={'lr':suspicion_lr(tr)};mm=miss_model(tr);pm=parity_model(tr);out={'_lr':lr['lr']}
     for name,pol,em,prop,l in [('chronological','chronological',None,False,0),('confidence','confidence',None,False,0),('gain','gain',None,False,0),
-                               ('gain+suspicion+context','gain',lr,True,0),('gain+racket','gain',{'miss':mm},False,0),('gain+racket+suspicion+context','gain',{**lr,'miss':mm},True,0),('oracle','oracle',None,False,0)]:
+                               ('gain+suspicion+context','gain',lr,True,0),('gain+racket+suspicion+context','gain',{**lr,'miss':mm},True,0),('+parity static','gain',{**lr,'miss':mm,'parity':pm},False,0),('+parity','gain',{**lr,'miss':mm,'parity':pm},True,0),('oracle','oracle',None,False,0)]:
         out[name]=simulate([Rally(c,model,th,tmodel,T,l) for c in test_clips],pol,em,prop)
     return out
 

@@ -23,7 +23,7 @@ def models():
         t=rv.Softmax();t.W,t.mu,t.sd=(np.array(f['type_model'][k]) for k in ['W','mu','sd'])
         dev=[c for c in rv.read(rv.STUDY/'clips.json')['clips'] if rv.in_role(c,'dev') and (ROUTES/c['clip_id']).exists()]
         flat=np.full((len(rv.TYPES),)*2,1/len(rv.TYPES));tr=[rv.Rally(c,m,f['threshold'],t,flat,0) for c in dev]
-        _models={'model':m,'th':f['threshold'],'tmodel':t,'trans':rv.transitions(tr),'lr':rv.suspicion_lr(tr),'miss':rv.miss_model(tr)}
+        _models={'model':m,'th':f['threshold'],'tmodel':t,'trans':rv.transitions(tr),'lr':rv.suspicion_lr(tr),'miss':rv.miss_model(tr),'parity':rv.parity_model(tr)}
     return _models
 
 def clip_by_id(clip_id):
@@ -90,13 +90,14 @@ def evidence(r,i,routes,xy):
         'p_real':round(up(float(models()['miss'].predict([[x['p_hit'],x['racket']]])[0])),3) if not x['inlog'] else None,
         'racket':round(float(np.expm1(x['racket'])),2),
         'sound':round(float(np.expm1(x['x'][11])),2),
+        'same_player':round(float(x.get('viol',0.)),3) if x['inlog'] else None,
         'detectors':agree,'support':sum(agree.values()),
         'stacked':top(post),'bst0':top(p0),'bst_cg_ap':top(p1) if p1 else [],
         'author_window':top(x['alt'][0]) if x.get('alt') else [],
         'turn':round(float(x['x'][2]),3),'speed':round(float(x['x'][3]),3),
         'path':[None if np.isnan(xy[t]).any() else [round(float(xy[t][0]),1),round(float(xy[t][1]),1)] for t in range(max(0,f-15),min(len(xy),f+16))],
         'path_start':max(0,f-15)}
-    pr=rv.priority(r,x,'gain',{'miss':models()['miss']});ev['priority']=round(pr,4) if pr is not None else None
+    pr=rv.priority(r,x,'gain',{'miss':models()['miss'],'parity':models()['parity']});ev['priority']=round(pr,4) if pr is not None else None
     ev['reason']=None if x['locked'] else ('可能漏了一拍' if not x['inlog'] else '可能不是击球' if ev['p_false']>=(ev['p_type'] or 0) else '球种可能判错')
     return ev
 
