@@ -18,7 +18,7 @@ _lock=threading.Lock();_models=None;_cache={}
 def models():
     global _models
     if _models is None:
-        f=rv.read(rv.STUDY/'frozen_verify_v3_racket.json')
+        f=rv.read(rv.STUDY/'frozen_verify_v3_racket_audio.json')
         m=rv.Logistic();m.w,m.mu,m.sd=(np.array(f['hit_model'][k]) for k in ['w','mu','sd'])
         t=rv.Softmax();t.W,t.mu,t.sd=(np.array(f['type_model'][k]) for k in ['W','mu','sd'])
         dev=[c for c in rv.read(rv.STUDY/'clips.json')['clips'] if rv.in_role(c,'dev') and (ROUTES/c['clip_id']).exists()]
@@ -89,6 +89,7 @@ def evidence(r,i,routes,xy):
         'p_false':round(up(1-x['p_hit']),3) if x['inlog'] else None,'p_type':round(up(1-max(x['post'])),3) if x['inlog'] and x.get('post') is not None else None,
         'p_real':round(up(float(models()['miss'].predict([[x['p_hit'],x['racket']]])[0])),3) if not x['inlog'] else None,
         'racket':round(float(np.expm1(x['racket'])),2),
+        'sound':round(float(np.expm1(x['x'][11])),2),
         'detectors':agree,'support':sum(agree.values()),
         'stacked':top(post),'bst0':top(p0),'bst_cg_ap':top(p1) if p1 else [],
         'author_window':top(x['alt'][0]) if x.get('alt') else [],

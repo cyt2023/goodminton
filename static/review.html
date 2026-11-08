@@ -75,8 +75,9 @@ video{display:block;width:100%;border-radius:12px;background:#183126;aspect-rati
       <div id="evProbs"></div>
       <h3>多少个找拍器同意这里有一拍</h3>
       <div id="evDets" class="dets"></div>
-      <h3>球拍有没有碰到球</h3>
+      <h3>球拍有没有碰到球、有没有击球声</h3>
       <div id="evRacket" class="muted"></div>
+      <div id="evSound" class="muted"></div>
       <h3>球种候选</h3>
       <div class="cols" id="evCands"></div>
       <h3>击球前后的球路（红点为判定的击球时刻）</h3>
@@ -129,6 +130,7 @@ function showEvidence(){const e=S.items[sel];$('evidence').hidden=false;
   $('evProbs').innerHTML=e.inlog?P('不是击球的可能',e.p_false)+P('球种判错的可能',e.p_type):P('确实有一拍的可能',e.p_real);
   $('evDets').innerHTML=`<span class="muted" style="width:100%">${Object.keys(e.detectors).length} 个找拍器中 ${e.support} 个在这里报了击球</span>`+Object.entries(e.detectors).map(([k,v])=>{const[p,m]=k.split('__');return `<span class="det ${v?'on':''}">${p==='tn3'?'TNv3':'RV'} ${RNAMES[m]||m}</span>`}).join('');
   $('evRacket').innerHTML=e.racket>=9?'这段时间没有检测到球拍。':`击球前后 3 帧内，球离拍头最近约 <b>${e.racket.toFixed(2)}</b> 个拍长（${e.racket<0.5?'很近，像是真的击中':e.racket<1.5?'较近':'较远，可能并没有击中'}）`;
+  $('evSound').innerHTML=`击球声：这一刻高频瞬态约为本回合平常水平的 <b>${e.sound.toFixed(1)}</b> 倍（${e.sound>=4?'很明显':e.sound>=2?'有一些':'几乎听不到'}；已按这场比赛的声画延迟对齐）`;
   $('evCands').innerHTML=`<div class="cand"><div class="lab">综合判断</div>${bars(e.stacked)}</div><div class="cand"><div class="lab">BST（原窗口）</div>${bars(e.bst0)}</div><div class="cand"><div class="lab">BST（按作者规则）</div>${bars(e.author_window)}</div>`;
   drawPath(e);$('evContext').innerHTML=`<span>上一拍：${prev?nm(prev.label)+' · '+(e.time-prev.time).toFixed(1)+'s 前':'无'}</span><span>下一拍：${next?nm(next.label)+' · '+(next.time-e.time).toFixed(1)+'s 后':'无'}</span>`;
   const A=$('evActions'),T=$('evTypes');A.innerHTML='';T.innerHTML='';

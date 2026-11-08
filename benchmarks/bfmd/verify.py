@@ -16,6 +16,7 @@ ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
 from benchmarks.bfmd.refine import track,turn,speed
 from benchmarks.bfmd.bfmd_labels import bfmd_label
 from benchmarks.bfmd.rally_clips import in_role
+from benchmarks.bfmd import audio
 STUDY=ROOT.parent/'03_数据/独立基准/BFMD/pipeline_study'
 VARIANT=os.environ.get('BFMD_VARIANT','v3');ROUTES=STUDY/f'routes_{VARIANT}'
 PRIMARY='tn3__gru_shared';WIN=3;ADD_SUPPORT=3
@@ -51,11 +52,23 @@ def candidates(clip):
         gaps=[abs(f-g) for k,g in enumerate(frames) if k!=j]
         c['x']=[c['primary'],sup/max(1,len(others)),max(turn(xy,t) for t in range(max(0,f-2),min(len(xy),f+3))),min(speed(xy,f),30)/30,
                 top[0],top[0]-top[1],float(bfmd_label(p0)==bfmd_label(p1)) if p1 else .5,pose,min(min(gaps,default=90),90)/90,
-                float(c['hit'].get('hit_score') or 0),racket_contact(clip,f)]
+                float(c['hit'].get('hit_score') or 0),racket_contact(clip,f),audio.peak(clip['path'],f/30,match_lag(clip))]
         c['time']=f/30;c['probs']=(p0,p1);c['traj']=flight(xy,dense,f,H)
     return cands
 
 TYPES=['clear','lift','drop','smash','drive','push','net_kill','net','defense']
+_LAG={}
+def match_lag(clip):
+    """Per-match broadcast audio lag, estimated label-free from the primary detector's hits in all of the match's clips."""
+    m=clip['youtube_id']
+    if m not in _LAG:
+        pairs=[]
+        for c in read(STUDY/'clips.json')['clips']:
+            f=ROUTES/c['clip_id']/f'{PRIMARY}.json'
+            if c['youtube_id']==m and 'path' in c and f.exists():pairs+=[(c['path'],h['time']) for h in read(f)['hits']]
+        _LAG[m]=audio.estimate_lag(pairs)
+    return _LAG[m]
+
 _RK={}
 def racket_contact(clip,f,w=3):
     """log(1 + closest shuttle-to-racket-head distance within +-w frames, in racket sizes); RacketVision rackets."""
@@ -235,7 +248,7 @@ def code_hashes():
     here=Path(__file__).parent
     return {f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(here.glob('*.py'))}
 
-FROZEN=STUDY/f'frozen_verify_{VARIANT}_racket.json'  # v3 agent + racket contact evidence; frozen_verify_v3.json kept for the earlier result
+FROZEN=STUDY/f'frozen_verify_{VARIANT}_racket_audio.json'  # v3 agent + racket contact + impact sound; earlier frozen agents kept
 def freeze():
     if FROZEN.exists():raise ValueError('Verification agent already frozen')
     clips,data,types,byid=dev_data();model,th,tmodel=fit_both(list(byid),data,types,byid)

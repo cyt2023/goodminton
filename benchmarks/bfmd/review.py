@@ -224,7 +224,7 @@ if __name__=='__main__':
         print('share         ',' '.join(f'{g:5.2f}' for g in GRID))
         for k,v in res.items():print(f"{k:14s}",' '.join(f'{x:.3f}' for x in v))
     else:
-        f=read(STUDY/'frozen_verify_v3_racket.json')
+        f=read(STUDY/'frozen_verify_v3_racket_audio.json')
         model=Logistic();model.w,model.mu,model.sd=(np.array(f['hit_model'][k]) for k in ['w','mu','sd'])
         tmodel=Softmax();tmodel.W,tmodel.mu,tmodel.sd=(np.array(f['type_model'][k]) for k in ['W','mu','sd'])
         test=[c for c in read(STUDY/'clips.json')['clips'] if in_role(c,'new_test')]
