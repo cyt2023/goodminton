@@ -126,3 +126,10 @@ def video(clip_id):
     p=Path(clip_by_id(clip_id)['path'])
     if not p.is_file():raise FileNotFoundError('回合视频不存在')
     return p
+
+def frame(clip_id,t):
+    """JPEG of the rally video at time t (poster for the selected hit)."""
+    import cv2
+    cap=cv2.VideoCapture(str(video(clip_id)));cap.set(cv2.CAP_PROP_POS_MSEC,max(0.,float(t))*1000);ok,img=cap.read();cap.release()
+    if not ok:raise FileNotFoundError('无法读取该时刻的画面')
+    return cv2.imencode('.jpg',img,[cv2.IMWRITE_JPEG_QUALITY,85])[1].tobytes()

@@ -214,11 +214,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json_response({'error':str(error)},400)
             except (OSError,RuntimeError):
                 return self.json_response({'error':'击球片段暂时无法生成'},500)
-        if path == '/api/review' or path.startswith('/api/review/') or path.startswith('/review-video/'):
+        if path == '/api/review' or path.startswith('/api/review/') or path.startswith('/review-video/') or path.startswith('/review-frame/'):
             try:
                 from benchmarks.bfmd import review_web
                 if path == '/api/review':return self.json_response(review_web.listing())
                 if path.startswith('/review-video/'):return self.serve_media(review_web.video(path.removeprefix('/review-video/')))
+                if path.startswith('/review-frame/'):
+                    data=review_web.frame(path.removeprefix('/review-frame/'),parse_qs(urlparse(self.path).query).get('t',['0'])[0])
+                    self.send_response(200);self.send_header('Content-Type','image/jpeg');self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store');self.end_headers();return self.wfile.write(data)
                 return self.json_response(review_web.state(path.removeprefix('/api/review/')))
             except (ValueError,FileNotFoundError) as error:return self.json_response({'error':str(error)},400)
         if path == '/api/state':

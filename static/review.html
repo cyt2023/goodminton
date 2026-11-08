@@ -63,7 +63,7 @@ video{display:block;width:100%;border-radius:12px;background:#183126;aspect-rati
   <section class="panel">
     <video id="video" controls muted playsinline></video>
     <svg id="timeline" role="img" aria-label="证据时间轴"></svg>
-    <p class="muted">上排圆点是系统记下的击球（绿色可信，橙红可疑，虚线圈为可能漏掉的击球，带 ✓ 为已核对）；下面每一行是一个找拍器报的击球。点圆点可跳到那一拍。</p>
+    <p class="muted">上排圆点是系统记下的击球（绿色可信，橙红可疑，虚线圈为可能漏掉的击球，带 ✓ 为已核对，灰色 ✕ 为已删除或已排除）；下面每一行是一个找拍器报的击球。点圆点可跳到那一拍。</p>
   </section>
   <section>
     <div class="panel">
@@ -101,12 +101,12 @@ const nm=t=>NAMES[t]||t||'未知';
 let S=null,sel=null,loop=null;
 async function api(path,body){const r=await fetch(path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json','X-Session-Token':token},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.error||'暂时无法读取');return d}
 function risk(e){return e.inlog?(e.p_false||0)+(1-(e.p_false||0))*(e.p_type||0):(e.p_real||0)}
-function color(e){if(e.locked)return '#315b44';const p=risk(e);return p<.2?'#4f8a5b':p<.45?'#c9822b':'#b4472f'}
+function color(e){if(e.locked)return e.inlog?'#315b44':'#b9bdb5';const p=risk(e);return p<.2?'#4f8a5b':p<.45?'#c9822b':'#b4472f'}
 async function loadClips(){const d=await api('/api/review');const c=$('clip');d.clips.sort((a,b)=>(a.role===b.role?0:a.role==='new_test'?-1:1));
   c.innerHTML=d.clips.map(x=>`<option value="${x.clip_id}">${x.role==='new_test'?'新回合':'开发'} · ${x.match.split('-').slice(-6).join(' ')} · ${x.duration}s${x.reviewed?' · 已核对'+x.reviewed:''}</option>`).join('');
-  const want=new URLSearchParams(location.search).get('clip');if(want)c.value=want;await load()}
+  const q=new URLSearchParams(location.search),want=q.get('clip');if(want)c.value=want;$('research').checked=q.has('research');await load()}
 async function load(){$('err').textContent='';$('evidence').hidden=true;sel=null;$('sExpected').textContent='加载中…';
-  try{S=await api('/api/review/'+$('clip').value);$('video').src=S.clip.video;render()}catch(e){$('err').textContent=e.message}}
+  try{S=await api('/api/review/'+$('clip').value);$('video').src=S.clip.video;render();if(S.queue.length)select(S.queue[0],false)}catch(e){$('err').textContent=e.message}}
 function render(){$('sReviewed').textContent=S.reviewed;$('sSeconds').textContent=S.review_seconds+' 秒';$('sExpected').textContent=S.expected_errors;$('sLog').textContent=S.log_size;
   $('sRef').hidden=!$('research').checked;$('sRef').textContent=`与 BFMD 参考答案对比：联合 F1 = ${S.reference.joint_f1}`;
   const q=S.queue.slice(0,8).map(i=>S.items[i]);
@@ -118,11 +118,11 @@ function drawTimeline(){const svg=$('timeline'),W=svg.clientWidth||800,rows=Obje
   rows.forEach((r,k)=>{const y=52+k*12,[p,m]=r.split('__');h+=`<text x="${L-6}" y="${y+3}" font-size="9" text-anchor="end" fill="#6d7e73">${p==='tn3'?'TNv3':'RV'} ${RNAMES[m]||m}</text>`;
     S.routes[r].forEach(t=>h+=`<circle cx="${x(t)}" cy="${y}" r="2.6" fill="${p==='tn3'?'#3f5f8f':'#7a9cc6'}"/>`)});
   S.items.forEach(e=>{const cx=x(e.time),c=color(e);h+=`<line x1="${cx}" x2="${cx}" y1="30" y2="${H-14}" stroke="#e3e9df"/>`;
-    h+=`<g data-i="${e.index}" style="cursor:pointer"><circle cx="${cx}" cy="22" r="${sel===e.index?10:8}" fill="${e.inlog?c:'#fff'}" stroke="${e.inlog?'#fff':c}" stroke-width="2" ${e.inlog?'':'stroke-dasharray="3 2"'}/>${e.locked?`<text x="${cx}" y="26" font-size="11" text-anchor="middle" fill="#fff">✓</text>`:''}</g>`});
+    h+=`<g data-i="${e.index}" style="cursor:pointer"><circle cx="${cx}" cy="22" r="${sel===e.index?10:8}" fill="${e.inlog?c:'#fff'}" stroke="${e.inlog?'#fff':c}" stroke-width="2" ${e.inlog||e.locked?'':'stroke-dasharray="3 2"'}/>${e.locked?`<text x="${cx}" y="26" font-size="11" text-anchor="middle" fill="${e.inlog?'#fff':'#8a8f87'}">${e.inlog?'✓':'✕'}</text>`:''}</g>`});
   h+=`<text x="${L-6}" y="25" font-size="10" text-anchor="end" fill="#213d32">记录</text><line id="playhead" x1="${L}" x2="${L}" y1="8" y2="${H-14}" stroke="#b4472f" stroke-width="1.5"/>`;
   for(let t=0;t<=S.clip.duration;t+=2)h+=`<text x="${x(t)}" y="${H-3}" font-size="9" text-anchor="middle" fill="#6d7e73">${t}s</text>`;
   svg.innerHTML=h;svg.querySelectorAll('g[data-i]').forEach(g=>g.onclick=()=>select(+g.dataset.i))}
-function select(i){sel=i;const e=S.items[i];play(e.time);render();$('evidence').scrollIntoView({block:'nearest'})}
+function select(i,scroll=true){sel=i;const e=S.items[i];$('video').poster=`/review-frame/${S.clip.clip_id}?t=${e.time}`;play(e.time);render();if(scroll)$('evidence').scrollIntoView({block:'nearest'})}
 function play(t){const v=$('video');clearInterval(loop);v.currentTime=Math.max(0,t-1.2);v.play().catch(()=>{});loop=setInterval(()=>{if(v.currentTime>=t+.8){v.pause();clearInterval(loop)}},50)}
 function bars(list){return list.map(([k,p])=>`<div><span>${nm(k)}</span><span>${Math.round(p*100)}%</span></div>`).join('')||'<div class="muted">无</div>'}
 function showEvidence(){const e=S.items[sel];$('evidence').hidden=false;
@@ -149,7 +149,7 @@ function drawPath(e){const svg=$('evPath'),W=svg.clientWidth||320,H=110,pts=e.pa
   pts.forEach((p,i)=>{if(i)h+=`<line x1="${X(pts[i-1][1])}" y1="${Y(pts[i-1][2])}" x2="${X(p[1])}" y2="${Y(p[2])}" stroke="${p[0]<=c?'#7a9cc6':'#315b44'}" stroke-width="2"/>`});
   const hit=pts.reduce((a,p)=>Math.abs(p[0]-c)<Math.abs(a[0]-c)?p:a);h+=`<circle cx="${X(hit[1])}" cy="${Y(hit[2])}" r="5" fill="#b4472f"/>`;
   h+=`<text x="${W-8}" y="${H-4}" font-size="10" text-anchor="end" fill="#6d7e73">蓝：击球前 · 绿：击球后</text>`;svg.innerHTML=h}
-async function send(action,label){try{const i=sel;S=await api('/api/review/'+$('clip').value,{index:i,action,label});const nxt=S.queue[0];sel=nxt??null;render();if(nxt!==undefined)play(S.items[nxt].time)}catch(e){$('err').textContent=e.message}}
+async function send(action,label){try{const i=sel;S=await api('/api/review/'+$('clip').value,{index:i,action,label});const nxt=S.queue[0];if(nxt!==undefined)select(nxt,false);else{sel=null;render()}}catch(e){$('err').textContent=e.message}}
 $('clip').onchange=()=>{history.replaceState(null,'','?clip='+$('clip').value);load()};
 $('research').onchange=()=>S&&render();
 $('reset').onclick=async()=>{if(!confirm('清空这个回合的核对记录？'))return;S=await api('/api/review/'+$('clip').value,{reset:true});sel=null;$('evidence').hidden=true;render()};
