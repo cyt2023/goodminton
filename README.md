@@ -77,6 +77,8 @@
 
 方括号为 95% 区间。节省主要来自两部分：多来源证据让自动记录本身更准（复核前 0.684 → 0.721），出错模型让前 20% 的复核更集中在真错误上。
 
+“挪动时刻”这个操作单独看：在 50% 以内的复核量上只省 1–5% 的时间（区间包含 0），时刻证据用于排序也没有增益；它的作用在复核后期，全部复核完时剩余漏拍从 103 个减到 76 个（联合 F1 0.950 → 0.962）。
+
 ### 自动记录与证据
 
 ![自动记录结果](docs/images/result_auto_log.png)
@@ -194,7 +196,7 @@ python -m benchmarks.bfmd.verify evaluate                 # 核验 Agent，开�
 python -m benchmarks.bfmd.verify freeze                   # 用全部开发集拟合并冻结
 python -m benchmarks.bfmd.verify apply --role new_test    # 冻结 Agent 处理新回合
 python benchmarks/bfmd/study_score.py --role new_test     # 唯一读取 BFMD 标注的评分步骤
-python -m benchmarks.bfmd.review lomo                     # 12 场逐场留出：复核模拟（REVIEW_ABLATE=sources 为去掉多来源证据的消融）
+python -m benchmarks.bfmd.review lomo                     # 12 场逐场留出：复核模拟（REVIEW_ABLATE=sources 去掉多来源证据；REVIEW_RETIME=0 复核者只能删除不能挪时刻）
 python -m benchmarks.bfmd.review_metrics evidence --base-run ablate_sources   # 节省时间与自助法区间
 python -m benchmarks.bfmd.review freeze                   # 冻结工作台用的逐场模型包
 ```

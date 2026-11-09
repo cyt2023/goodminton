@@ -22,6 +22,7 @@ from benchmarks.bfmd.verify import (STUDY,TYPES,candidates,truth_labels,truth_ty
                                     fit_both,dev_data,Logistic,Softmax,read,save,in_role,timing_evidence,ROOT as _R)
 COST={'hit':5.,'miss':6.,'retime':3.}  # seconds to check a logged hit (existence+type) / a suggested missing hit / extra to move a mistimed hit
 RETIME=.4  # a logged hit whose nearest unmatched reference contact is within this many seconds can be moved there by the reviewer
+RETIME_ON=os.environ.get('REVIEW_RETIME','1')=='1'  # 0: ablation, the reviewer can only delete a mistimed hit
 # Change in joint F1 = 2tp/(2tp+fp+fn) per fix, in units of 1/denominator at F1 ~ 0.7:
 # drop a false hit -> denominator -1 (~F1); fix a type -> numerator +2; add a missed hit -> +2 / +1 (~2-F1)
 GAIN={'false':.7,'type':2.,'miss':1.3,'retime':2.}
@@ -97,7 +98,7 @@ class Rally:
     def __init__(self,clip,model,th,tmodel,trans,lam):
         self.clip,self.tmodel,self.trans,self.lam=clip,tmodel,trans,lam
         self.c=cached_candidates(clip);self.y=truth_labels(clip,self.c);self.ty=truth_types(clip,self.c);self.n_typed=typed_truth_count(clip)
-        self.near=near_truth(clip,self.c,self.y);self.retime=True
+        self.near=near_truth(clip,self.c,self.y);self.retime=RETIME_ON
         p=model.predict([x['x'] for x in self.c]) if self.c else []
         for x,v in zip(self.c,p):x.update(p_hit=float(v),inlog=bool(v>=th),locked=False,clamp=None,label=None,tp=None,odds=1.,racket=x['x'][10])
         self.decode()
@@ -235,7 +236,7 @@ def priority(r,x,policy,em=None):
     if policy=='evidence':  # error models over all evidence; reviewed neighbours raise / lower the odds
         up=lambda q:x['odds']*q/(1-q+1e-9)/(1+x['odds']*q/(1-q+1e-9));E=em['E'];f=evidence_x(r,x)
         if x['inlog']:
-            pf=up(E.p('fp',f));pm=min(pf,up(E.p('mt',f)));pt=up(E.p('ty',f))
+            pf=up(E.p('fp',f));pm=min(pf,up(E.p('mt',f))) if r.retime and not em.get('no_timing') else 0.;pt=up(E.p('ty',f))
             return (pm*GAIN['retime']+(pf-pm)*GAIN['false']+(1-pf)*pt*GAIN['type'])/(COST['hit']+pm*COST['retime'])
         return up(E.p('miss',f))*GAIN['miss']/COST['miss']
     if policy=='single_hit':return 1-min(1.,x['x'][9]) if x['inlog'] else None
@@ -338,7 +339,8 @@ def run_fold(train_clips,test_clips,model,th,tmodel,lam,E=None):
     runs=[('chronological','chronological',None,False),('single_hit','single_hit',None,False),('single_type','single_type',None,False),('single','single',None,False),
           ('confidence','confidence',None,False),('gain+racket+suspicion+parity','gain',{**lr,'miss':mm,'parity':pm},True)]
     if E is not None:runs+=[('evidence','evidence',{'E':E['all']},False),('evidence+propagation','evidence',{**lr,'E':E['all']},True),
-                            ('evidence - rally structure','evidence',{'E':E['no rally structure']},False),('evidence - new sources','evidence',{'E':E['no new sources']},False)]
+                            ('evidence - rally structure','evidence',{'E':E['no rally structure']},False),('evidence - new sources','evidence',{'E':E['no new sources']},False),
+                            ('evidence - timing in ranking','evidence',{'E':E['all'],'no_timing':True},False)]
     for name,pol,em,prop in runs+[('oracle','oracle',None,False)]:
         out[name]=simulate([Rally(c,model,th,tmodel,T,lam) for c in test_clips],pol,em,prop)
     return out
@@ -381,7 +383,7 @@ if __name__=='__main__':
             model,th,tmodel=fit_both([c['clip_id'] for c in train],data,types,byid)
             E=crossfit_error_models(train,data,types,byid)
             folds.append(run_fold(train,test,model,th,tmodel,0,E));print('fold',m,len(test),'clips',flush=True)
-        res=pool(folds);save(STUDY/f"review_lomo12{'_ablate_'+ablate if ablate else ''}.json",{'grid_share':GRID,'curves':res,'cost':COST,'clips':len(clips),
+        res=pool(folds);save(STUDY/f"review_lomo12{'_ablate_'+ablate if ablate else ''}{'' if RETIME_ON else '_noretime'}.json",{'grid_share':GRID,'curves':res,'cost':COST,'clips':len(clips),
                                                         'per_match':{m:{k:v for k,v in f.items() if not k.startswith('_')} for m,f in zip(sorted({c['youtube_id'] for c in clips}),folds)}})
         print('share         ',' '.join(f'{g:5.2f}' for g in GRID))
         for k,v in res.items():print(f"{k:14s}",' '.join(f'{x:.3f}' for x in v))
