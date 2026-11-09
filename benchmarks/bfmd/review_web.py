@@ -9,7 +9,8 @@ import json,threading,time
 from pathlib import Path
 import numpy as np
 from benchmarks.bfmd import review as rv
-from benchmarks.bfmd.verify import WIN,ROUTES,PRIMARY,truth_labels,truth_types
+from benchmarks.bfmd.verify import WIN,ROUTES,PRIMARY,truth_labels,truth_types,racket_contact,match_lag
+from benchmarks.bfmd import audio
 
 SESSIONS=rv.STUDY/'review_sessions'
 ACTIONS=('confirm','retype','reject','add','dismiss','retime')
@@ -25,7 +26,14 @@ def bundle(match):
         t=rv.Softmax();t.W,t.mu,t.sd=(np.array(b['type_model'][k]) for k in ['W','mu','sd'])
         h=None
         if b.get('head'):h=rv.Softmax();h.W,h.mu,h.sd=(np.array(b['head'][k]) for k in ['W','mu','sd'])
+        cm=None
+        if b.get('contact'):  # contact-time model of this bundle (trained on its 11 training matches)
+            import torch
+            from benchmarks.bfmd import contact as ct
+            pk=torch.load(rv.STUDY/'contact_models'/b['contact']['path'],weights_only=False);cm=ct.Model(pk['d'])
+            cm.net.load_state_dict(pk['state']);cm.mu,cm.sd,cm.prior=pk['mu'],pk['sd'],pk['prior']
         _models[match]={'model':m,'th':b['threshold'],'tmodel':t,'E':rv.ErrorModels.load(b['error_models']),'head':h,'auto':b.get('auto_pass'),
+                        'contact':(cm,b['contact']['pdup'],b['contact']['delta']) if cm else None,
                         'lr':{k=='True':v for k,v in b['suspicion_lr'].items()},'trans':np.full((len(rv.TYPES),)*2,1/len(rv.TYPES))}
     return _models[match]
 
@@ -66,6 +74,8 @@ def apply(r,i,action,label=None,t=None):
     wrong=action in ('reject','add','retime') or (action=='retype' and label!=was)
     if not again:  # a type fix right after moving the hit is the same review, not new evidence about the neighbours
         for k in r.neighbours(i):r.c[k]['odds']*=bundle(r.clip['youtube_id'])['lr'][wrong]
+    cm=bundle(r.clip['youtube_id'])['contact']
+    if cm and x['inlog']:rv.dedupe(r,cm[1])  # unreviewed duplicates of this contact are merged into the reviewed hit
     r.decode();return wrong
 
 def session(clip_id):
@@ -80,7 +90,9 @@ def session(clip_id):
                 for x,p in zip(rv._CANDS[k],rv.proba(m['head'],[emb[x['frame']] for x in rv._CANDS[k]])):x['head']=p
             r=rv.Rally(c,m['model'],m['th'],m['tmodel'],m['trans'],0);before={i for i,x in enumerate(r.c) if x['inlog']}
             if m['auto'] is not None:rv.auto_pass(r,m['E'],m['auto'])  # second automatic check before the reviewer sees the log
-            after={i for i,x in enumerate(r.c) if x['inlog']};r.auto={'removed':len(before-after),'added':len(after-before)}
+            if m['contact']:rv.contact_pass(r,m['contact'][0],m['contact'][1],m['contact'][2])  # move hits to the modelled contact frame, merge duplicates
+            after={i for i,x in enumerate(r.c) if x['inlog']}
+            r.auto={'removed':len(before-after),'added':len(after-before),'moved':sum(1 for x in r.c if x['inlog'] and x.get('cmoved'))}
             for a in actions:apply(r,a['index'],a['action'],a.get('label'),a.get('time'))
             _cache.clear();_cache[key]=r
         return c,_cache[key],actions
@@ -103,21 +115,21 @@ def reset(clip_id):
 def top(probs,n=3):
     return [[k,round(float(v),3)] for k,v in sorted(probs.items(),key=lambda kv:-kv[1])[:n]]
 
-SUGGEST=np.log(8)  # timing suggestion when a sound peak 8x stronger sits >3 frames away: shown on ~5% of hits, about a quarter of them mistimed
-
 def evidence(r,i,routes,xy):
     x=r.c[i];f=x['frame'];p0,p1=x['probs']
     agree={k:any(abs(g-f)<=WIN for g in v) for k,v in routes.items()}
     post=dict(zip(rv.TYPES,x['post'])) if x.get('post') is not None else {}
     up=lambda q:x['odds']*q/(1-q+1e-9)/(1+x['odds']*q/(1-q+1e-9));E=bundle(r.clip['youtube_id'])['E'];fe=rv.evidence_x(r,x)
+    moved=bool(x.get('cmoved') or x.get('retimed'))  # racket / sound shown at the hit's current moment
     pf,pm,pt,pr=rv.error_probs(r,x,E,fe,up)
     ev={'index':i,'time':round(x['time'],3),'frame':f,'inlog':x['inlog'],'locked':x['locked'],'retimed':bool(x.get('retimed')),'label':x['label'],
         'hitter':'near' if x['traj'][14]>.5 else 'far','p_hit':round(x['p_hit'],3),
         'p_false':round(pf,3) if x['inlog'] else None,'p_mistimed':round(pm,3) if x['inlog'] else None,
         'p_type':round(pt,3) if x['inlog'] else None,'p_real':round(pr,3) if not x['inlog'] else None,'auto':x['auto'][0] if x.get('auto') else None,
-        'racket':round(float(np.expm1(x['racket'])),2),
-        'sound':round(float(np.expm1(x['x'][11])),2),
-        'suggest_time':round(x['tev'][0]/30,3) if abs(x['tev'][0]-f)>3 and x['tev'][1]>=SUGGEST else None,'suggest_ratio':round(float(np.exp(x['tev'][1])),1),
+        'racket':round(float(np.expm1(racket_contact(r.clip,f) if moved else x['racket'])),2),
+        'sound':round(float(np.expm1(audio.peak(r.clip['path'],f/30,match_lag(r.clip)) if moved else x['x'][11])),2),
+        'suggest_time':round(x['cbest']/30,3) if x.get('cbest') is not None and abs(x['cbest']-f)>=2 else None,'suggest_prob':round(x.get('cprob',0.),2),
+        'model_moved':bool(x.get('cmoved')),
         'same_player':round(float(x.get('viol',0.)),3) if x['inlog'] else None,
         'detectors':agree,'support':sum(agree.values()),
         'stacked':top(post),'bst0':top(p0),'bst_cg_ap':top(p1) if p1 else [],

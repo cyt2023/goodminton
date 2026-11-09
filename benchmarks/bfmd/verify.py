@@ -22,6 +22,7 @@ VARIANT=os.environ.get('BFMD_VARIANT','v3');ROUTES=STUDY/f'routes_{VARIANT}'
 PRIMARY='tn3__gru_shared';WIN=3;ADD_SUPPORT=3
 USE_ALT=os.environ.get('VERIFY_ALT','1')=='1'  # author-window BST re-check tool
 HEAD_IN_TYPE=os.environ.get('REVIEW_TYPEHEAD','0')=='1'  # 2: the BFMD head is evidence for the error models only
+GEOM=os.environ.get('REVIEW_GEOM','0')=='1'  # rally geometry for the stroke type: where and when the previous / next contact happens
 
 def read(p):return json.loads(Path(p).read_text())
 def save(p,v):Path(p).parent.mkdir(parents=True,exist_ok=True);Path(p).write_text(json.dumps(v,ensure_ascii=False,indent=1,allow_nan=False)+'\n')
@@ -158,6 +159,9 @@ def type_x(kept,j,alt=None):
         nb=kept[k] if 0<=k<len(kept) and abs(kept[k]['time']-c['time'])<=2.5 else None
         x+=type_vec(nb['probs'][0]) if nb else [0.]*len(TYPES)
         x+=[min(abs(nb['time']-c['time']),2.5)/2.5 if nb else 1.]
+        if GEOM:  # neighbouring contact in court coordinates (far baseline y=0), its hitter's depth, and how far the shuttle travelled
+            t=nb['traj'] if nb else None
+            x+=[t[12],t[13],t[15],t[13]-c['traj'][13],float(nb is not None)] if nb else [.5,.5,.25,0.,0.]
     return x
 
 class Softmax:

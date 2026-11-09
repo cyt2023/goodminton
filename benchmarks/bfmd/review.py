@@ -330,7 +330,11 @@ def simulate(rallies,policy,em=None,propagate=False,full=None):
         r,i=pick;was_wrong=r.wrong(i);nb=r.neighbours(i);changed=r.answer(i);spent+=cost+(COST['retime'] if r.moved else 0.)
         if em is not None and 'lr' in em:
             for k in nb:r.c[k]['odds']*=em['lr'][was_wrong]
-        if changed and propagate:r.decode()
+        if em is not None and em.get('contact') is not None and propagate:  # a reviewed hit absorbs unreviewed duplicates logged for the same contact
+            if dedupe(r,em['contact']) or changed:r.decode()
+        elif em is not None and em.get('structure') is not None and propagate:  # rally-structured propagation: re-decode the log around the fix
+            if not structure_decode(r,em['structure'],em.get('pdup',.05)) and changed:r.decode()
+        elif changed and propagate:r.decode()
         elif changed and r.c[i]['inlog'] and r.c[i]['clamp']:r.c[i]['label']=r.c[i]['clamp']
     while len(out)<len(GRID):out.append(counts())
     return out
@@ -379,6 +383,114 @@ def parity_model(rallies):
             if x['inlog'] and r.y[k] is not None:X.append([1-min(x['p_hit'],max(x['post'])),x.get('viol',0.)]);Y.append(float(r.wrong(k)))
     return Logistic().fit(X,Y,l2=1.)
 
+GMIN=.3  # two contacts of a rally are at least this far apart: 0.5% of reference intervals are shorter
+CW=9  # contact localiser window: +-CW frames
+_CF={}
+def contact_feats(clip,f):
+    """Per-frame contact evidence in +-CW frames around f: impact sound (relative to the window peak), racket-shuttle closeness,
+    shuttle turn, share of detector routes firing there, offset from f, f itself."""
+    key=(clip['clip_id'],f)
+    if key not in _CF:
+        from benchmarks.bfmd.verify import match_lag,_RK,racket_contact
+        from benchmarks.bfmd.refine import turn
+        from benchmarks.bfmd import audio
+        racket_contact(clip,f);rk,xy=_RK[clip['clip_id']];lag=match_lag(clip);t,fl=audio.flux(clip['path'])
+        route_types(clip,f);rfr=[round(h['time']*30) for hits in _ROUTES[clip['clip_id']] for h in hits];F=[]
+        for g in range(f-CW,f+CW+1):
+            m=(t>=g/30+lag-1/60)&(t<g/30+lag+1/60);snd=float(np.log1p(fl[m].max())) if m.any() else 0.;best=9.
+            if 0<=g<min(len(xy),len(rk)) and not np.isnan(xy[g]).any():
+                for rr in rk[g]['rackets']:
+                    kp=np.array(rr['keypoints']);b=np.array(rr['bbox'][0])
+                    best=min(best,float(np.linalg.norm(xy[g]-kp[[0,3,4]].mean(0))/(np.hypot(b[2]-b[0],b[3]-b[1])+1e-6)))
+            F.append([snd,-np.log1p(best),turn(xy,g) if 2<=g<len(xy)-2 else 0.,sum(abs(q-g)<=1 for q in rfr),abs(g-f)/CW,float(g==f)])
+        F=np.array(F);F[:,0]-=F[:,0].max();F[:,3]/=max(1.,F[:,3].max());_CF[key]=F
+    return _CF[key]
+
+def ref_frames(clip):
+    m=next(x for x in read(_R.parent/'03_数据/独立基准/BFMD/manifest.json')['matches'] if x['match_id']==clip['match_id'])
+    lo=clip['offset_seconds'];hi=lo+clip['duration_seconds']
+    return [round((h['time']-lo)*30) for h in m['hits'] if lo<=h['time']<hi and h['label'] not in SERVES]
+
+def fit_contact(rallies,l2=1.,steps=400,lr=.5):
+    """Contact localiser (conditional logit over the window) trained on logged hits of training clips that have a reference contact nearby."""
+    X=[];Y=[]
+    for r in rallies:
+        gt=ref_frames(r.clip)
+        for x in r.c:
+            if not x['inlog']:continue
+            near=[g for g in gt if abs(g-x['frame'])<=CW]
+            if near:X.append(contact_feats(r.clip,x['frame']));Y.append(min(near,key=lambda g:abs(g-x['frame']))-x['frame']+CW)
+    X=np.stack(X);Y=np.array(Y);d=X.shape[2];mu=X.reshape(-1,d).mean(0);sd=X.reshape(-1,d).std(0)+1e-6;Z=(X-mu)/sd;wv=np.zeros(d)
+    for _ in range(steps):
+        s=Z@wv;P=np.exp(s-s.max(1,keepdims=True));P/=P.sum(1,keepdims=True)
+        wv-=lr*(((Z*P[:,:,None]).sum(1)-Z[np.arange(len(Y)),Y]).mean(0)+l2*wv/len(Y))
+    return {'mu':mu,'sd':sd,'w':wv}
+
+def contact_fit(cm,clip,f):
+    """How contact-like frame f is compared with the frames around it (score at f minus the window maximum)."""
+    s=((contact_feats(clip,f)-cm['mu'])/cm['sd'])@cm['w'];return float(s[CW]-s.max())
+BIG=50.
+
+def structure_init(r,E,cm=None,pdup=.05):
+    """Per-candidate log-odds of being a real contact (from the error models on the initial log) and the BST far-player probability.
+    With a contact localiser cm: of two likely-real candidates closer than GMIN (one contact logged twice), the one whose frame
+    fits the contact evidence worse is treated as the duplicate."""
+    tops=side_top(r.clip,[x['frame'] for x in r.c]) if r.c else []
+    for x,q in zip(r.c,tops):
+        f=evidence_x(r,x)
+        p=1-(E.p('fp',f)-min(E.p('fp',f),E.p('mt',f))) if x['inlog'] else E.p('miss',f)
+        x['p_real0']=min(max(p,1e-4),1-1e-4);x['top']=q;x['inlog0']=x['inlog']
+    if cm is not None:
+        seq=sorted([x for x in r.c if x['p_real0']>.5],key=lambda x:x['time'])
+        for a,b in zip(seq,seq[1:]):
+            if b['time']-a['time']<GMIN:
+                worse=min((a,b),key=lambda x:contact_fit(cm,r.clip,x['frame']))
+                worse['p_real0']=min(worse['p_real0'],pdup)
+
+def dup_rate(rallies):
+    """P(both real) for adjacent logged hits closer than GMIN (training clips)."""
+    n=b=0
+    for r in rallies:
+        seq=sorted([k for k,x in enumerate(r.c) if x['inlog'] and r.y[k] is not None],key=lambda k:r.c[k]['time'])
+        for i,j in zip(seq,seq[1:]):
+            if r.c[j]['time']-r.c[i]['time']<GMIN:n+=1;b+=r.y[i]==1 and r.y[j]==1
+    return (b+1)/(n+2)
+
+def structure_decode(r,lam=1.,pdup=.05):
+    """Rally-structured decoding of the log. Choose the candidates that maximise the summed log-odds of being a real contact,
+    subject to contacts >= GMIN apart, plus lam x log(2 P(alternate)) for consecutive contacts <= 2.5 s apart
+    (P from BST far-player probabilities). Reviewed candidates are fixed in or out. Returns True if the log changed."""
+    order=sorted(range(len(r.c)),key=lambda k:r.c[k]['time']);n=len(order)
+    if not n:return False
+    X=[r.c[k] for k in order];T=[x['time'] for x in X]
+    w=[(BIG if x['inlog'] else -np.inf) if x['locked'] else float(np.log(x['p_real0']/(1-x['p_real0']))) for x in X]
+    fixed=[i for i in range(n) if w[i]==BIG];best=[-np.inf]*n;prev=[-1]*n
+    for i in range(n):
+        if w[i]==-np.inf:continue
+        opts=[] if any(l<i for l in fixed) else [(0.,-1)]
+        for j in range(i):
+            if best[j]==-np.inf or any(j<l<i for l in fixed):continue
+            if T[i]-T[j]<GMIN and not (w[i]==BIG and w[j]==BIG):continue
+            a=0.
+            if lam and T[i]-T[j]<=2.5:pa=X[i]['top']*(1-X[j]['top'])+(1-X[i]['top'])*X[j]['top'];a=lam*float(np.log(max(2*pa,1e-3)))
+            opts.append((best[j]+a,j))
+        if opts:s,j=max(opts);best[i]=s+w[i];prev[i]=j
+    ends=[(best[i],i) for i in range(n) if best[i]>-np.inf and not any(l>i for l in fixed)]
+    if not fixed:ends.append((0.,-1))
+    i=max(ends)[1];keep=set()
+    while i>=0:keep.add(i);i=prev[i]
+    changed=False
+    for i,x in enumerate(X):
+        if x['locked'] or (i in keep)==x['inlog']:continue
+        x['inlog']=i in keep;changed=True
+        if x['inlog']==x['inlog0']:x.pop('auto',None)
+        elif x['inlog']:x['auto']=('added',1-x['p_real0'])
+        else:  # removed: a duplicate of a kept contact within GMIN is rarely real
+            dup=any(k in keep and abs(T[k]-T[i])<GMIN for k in range(n))
+            x['auto']=('removed',pdup if dup else x['p_real0'])
+    if changed:r.decode()
+    return changed
+
 def auto_pass(r,E,th=.5):
     """Second automatic verification before review: drop logged hits the error models call false, add left-out candidates they call real."""
     drop=[];add=[]
@@ -391,8 +503,85 @@ def auto_pass(r,E,th=.5):
     for x,q in add:x['inlog']=True;x['auto']=('added',1-q)
     if drop or add:r.decode()
 
+CDELTA=3.  # move a logged hit only if the contact model prefers another frame by this many log-odds (chosen on training matches in every fold)
+CGAP=9     # one contact per 0.3 s
+
+def relabel(r):
+    """Reference matching after hits moved: logged hits are matched first, then left-out candidates."""
+    order=sorted(range(len(r.c)),key=lambda k:(not r.c[k]['inlog'],r.c[k]['time']));cs=[r.c[k] for k in order]
+    y=truth_labels(r.clip,cs);ty=truth_types(r.clip,cs);r.y=[None]*len(r.c);r.ty=[None]*len(r.c)
+    for k,a,b in zip(order,y,ty):r.y[k]=a;r.ty[k]=b
+    r.near=near_truth(r.clip,r.c,r.y)
+
+def dedupe(r,pdup,gap=CGAP):
+    """Keep one logged hit per contact: of two closer than gap frames, drop the unreviewed one whose frame fits the contact model worse."""
+    xs=sorted([x for x in r.c if x['inlog']],key=lambda x:x['frame']);keep=[];changed=False
+    for x in xs:
+        if keep and x['frame']-keep[-1]['frame']<gap and not (x['locked'] and keep[-1]['locked']):
+            a=keep[-1]
+            loser=x if a['locked'] or (not x['locked'] and a.get('cscore',0.)>=x.get('cscore',0.)) else a
+            loser['inlog']=False;loser['auto']=('removed',pdup);changed=True
+            if loser is a:keep[-1]=x
+        else:keep.append(x)
+    return changed
+
+def contact_pass(r,cmod,pdup,delta=CDELTA):
+    """Before review: move logged hits to the frame the contact-time model prefers, then merge hits logged twice for one contact."""
+    from benchmarks.bfmd import contact as ct
+    xs=[x for x in r.c if x['inlog'] and not x['locked']]
+    if not xs:return
+    F=ct.frame_features(r.clip);S=cmod.scores(np.stack([ct.window(F,x['frame']) for x in xs]))
+    for x,s in zip(xs,S):
+        p=int(np.argmax(s));z=float(np.logaddexp.reduce(s));x['cscore']=float(s[ct.W])-z;x['cbest']=x['frame']+p-ct.W;x['cprob']=float(np.exp(s[p]-z))
+        if s[p]-s[ct.W]>delta:x['frame']+=p-ct.W;x['time']=x['frame']/30;x['cscore']=float(s[p])-z;x['cmoved']=True
+    dedupe(r,pdup);relabel(r);r.decode()
+
+def fit_contact_model(train_clips,tr):
+    """Contact-time CNN on the training matches' reference contacts; offset prior on their logged hits."""
+    from benchmarks.bfmd import contact as ct
+    X,y=ct.training_windows(train_clips);cmod=ct.Model(X.shape[2]).fit(X,y);P=[]
+    for r in tr:
+        gt=ref_frames(r.clip);F=ct.frame_features(r.clip)
+        for x in r.c:
+            near=[g for g in gt if abs(g-x['frame'])<=ct.W]
+            if x['inlog'] and near:P.append((ct.window(F,x['frame']),min(near,key=lambda g:abs(g-x['frame']))-x['frame']+ct.W))
+    return cmod.fit_prior(np.stack([a for a,_ in P]),np.array([b for _,b in P]))
+
+def oracle_structure(r):
+    """Ceiling of automatic rally-structure and timing fixes: with the reference, drop every logged duplicate of a true hit
+    (<=0.4 s) and move every mistimed hit to its contact (stroke type left as predicted)."""
+    tp=[k for k,x in enumerate(r.c) if x['inlog'] and r.y[k]==1]
+    for k,x in enumerate(r.c):
+        if not x['inlog'] or r.y[k]!=0 or x['locked']:continue
+        if r.near[k]:
+            g,lab=r.near[k];x['time']=g;x['frame']=round(g*30);r.y[k]=1.;r.ty[k]=lab;r.near[k]=None
+            for j,v in enumerate(r.near):
+                if v and abs(v[0]-g)<1e-9:r.near[j]=None
+        elif any(abs(r.c[j]['time']-x['time'])<=.4 for j in tp):x['inlog']=False
+    r.decode()
+
 def run_fold(train_clips,test_clips,model,th,tmodel,lam,E=None):
     flat=np.full((len(TYPES),len(TYPES)),1/len(TYPES))
+    if os.environ.get('REVIEW_CONTACT')=='1' and E is not None:  # contact-time model: timing fixes and duplicate merging before / during review
+        tr=[Rally(c,model,th,tmodel,flat,0) for c in train_clips];cmod=fit_contact_model(train_clips,tr);pdup=dup_rate(tr);out={'_pdup':pdup}
+        for name,pol,useC,prop in [('auto pass + evidence','evidence',False,False),('auto pass + contact + evidence','evidence',True,False),
+                                   ('auto pass + contact + evidence + propagation','evidence',True,True),('auto pass + contact + oracle','oracle',True,False)]:
+            rs=[Rally(c,model,th,tmodel,flat,lam) for c in test_clips];full=sum(len(r.log()) for r in rs)*COST['hit']
+            for r in rs:
+                auto_pass(r,E['all'])
+                if useC:contact_pass(r,cmod,pdup)
+            em={'E':E['all'],'contact':pdup} if pol=='evidence' and prop else ({'E':E['all']} if pol=='evidence' else None)
+            out[name]=simulate(rs,pol,em,prop,full)
+        return out
+    if os.environ.get('REVIEW_CEILING')=='1' and E is not None:  # only the runs needed for the ceiling of rally structure + timing
+        out={}
+        for name,ceil in [('auto pass + evidence',False),('ceiling: perfect structure+timing + evidence',True)]:
+            rs=[Rally(c,model,th,tmodel,flat,lam) for c in test_clips];full=sum(len(r.log()) for r in rs)*COST['hit']
+            for r in rs:
+                auto_pass(r,E['all'])
+                if ceil:oracle_structure(r)
+            out[name]=simulate(rs,'evidence',{'E':E['all']},False,full)
+        return out
     tr=[Rally(c,model,th,tmodel,flat,0) for c in train_clips];T=transitions(tr);lr={'lr':suspicion_lr(tr)};mm=miss_model(tr);pm=parity_model(tr);out={'_lr':lr['lr']}
     runs=[('chronological','chronological',None,False),('single_hit','single_hit',None,False),('single_type','single_type',None,False),('single','single',None,False),
           ('confidence','confidence',None,False),('gain+racket+suspicion+parity','gain',{**lr,'miss':mm,'parity':pm},True)]
@@ -406,6 +595,13 @@ def run_fold(train_clips,test_clips,model,th,tmodel,lam,E=None):
             rs=[Rally(c,model,th,tmodel,T,lam) for c in test_clips];full=sum(len(r.log()) for r in rs)*COST['hit']
             for r in rs:auto_pass(r,E['all'])
             out[name]=simulate(rs,pol,em,False,full)
+        pdup=dup_rate(tr);out['_pdup']=pdup;cm=fit_contact(tr)
+        for name,sl,prop,pol,useC in [('structure + evidence',1.,False,'evidence',False),('structure + evidence + propagation',1.,True,'evidence',False),
+                                      ('structure+contact + evidence',1.,False,'evidence',True),('structure+contact + evidence + propagation',1.,True,'evidence',True),
+                                      ('structure+contact + oracle',1.,False,'oracle',True)]:
+            rs=[Rally(c,model,th,tmodel,T,lam) for c in test_clips];full=sum(len(r.log()) for r in rs)*COST['hit']
+            for r in rs:structure_init(r,E['all'],cm if useC else None,pdup);structure_decode(r,sl,pdup)
+            out[name]=simulate(rs,pol,{'E':E['all'],'structure':sl,'pdup':pdup} if pol=='evidence' else None,prop,full)
     return out
 
 def f1(c):tp,fp,fn=c;return 2*tp/(2*tp+fp+fn)
@@ -413,7 +609,21 @@ def pool(folds):
     return {k:[f1(tuple(map(sum,zip(*[f[k][g] for f in folds])))) for g in range(len(GRID))] for k in folds[0] if not k.startswith('_')}
 
 if __name__=='__main__':
-    a=argparse.ArgumentParser();a.add_argument('step',choices=['evaluate','test','lomo','freeze']);a.add_argument('--lam',type=float,default=1.);a=a.parse_args()
+    a=argparse.ArgumentParser();a.add_argument('step',choices=['evaluate','test','lomo','freeze','freeze-contact']);a.add_argument('--lam',type=float,default=1.);a=a.parse_args()
+    if a.step=='freeze-contact':  # add a contact-time model to every frozen bundle, trained on the bundle's 11 training matches
+        import torch
+        from benchmarks.bfmd.verify import ROUTES,PRIMARY
+        f=STUDY/'frozen_review_lomo12.json';fz=read(f);out=STUDY/'contact_models';out.mkdir(exist_ok=True)
+        clips=[c for c in read(STUDY/'clips.json')['clips'] if (ROUTES/c['clip_id']/f'{PRIMARY}.json').exists()]
+        flat=np.full((len(TYPES),)*2,1/len(TYPES))
+        for m,b in fz['bundles'].items():
+            model=Logistic();model.w,model.mu,model.sd=(np.array(b['hit_model'][k]) for k in ['w','mu','sd'])
+            tmodel=Softmax();tmodel.W,tmodel.mu,tmodel.sd=(np.array(b['type_model'][k]) for k in ['W','mu','sd'])
+            train=[c for c in clips if c['youtube_id']!=m];tr=[Rally(c,model,b['threshold'],tmodel,flat,0) for c in train]
+            cm=fit_contact_model(train,tr);path=out/f'{m}.pt'
+            torch.save({'state':cm.net.state_dict(),'mu':cm.mu,'sd':cm.sd,'prior':cm.prior,'d':int(cm.mu.shape[0])},path)
+            b['contact']={'path':path.name,'pdup':dup_rate(tr),'delta':CDELTA,'gap':CGAP};print('contact model',m,flush=True)
+        save(f,fz);raise SystemExit
     if a.step=='freeze':  # per-match bundles for the review page: each match is served by models that never saw it
         from benchmarks.bfmd.verify import ROUTES,PRIMARY,code_hashes
         clips=[c for c in read(STUDY/'clips.json')['clips'] if (ROUTES/c['clip_id']/f'{PRIMARY}.json').exists()]
@@ -449,7 +659,7 @@ if __name__=='__main__':
             model,th,tmodel=fit_both([c['clip_id'] for c in train],data,types,byid)
             E=crossfit_error_models(train,data,types,byid)
             folds.append(run_fold(train,test,model,th,tmodel,0,E));print('fold',m,len(test),'clips',flush=True)
-        res=pool(folds);save(STUDY/f"review_lomo12{'_ablate_'+ablate if ablate else ''}{'' if RETIME_ON else '_noretime'}{'_typehead'+os.environ['REVIEW_TYPEHEAD'] if TYPEHEAD else ''}.json",{'grid_share':GRID,'curves':res,'cost':COST,'clips':len(clips),
+        res=pool(folds);save(STUDY/f"review_lomo12{'_ablate_'+ablate if ablate else ''}{'' if RETIME_ON else '_noretime'}{'_typehead'+os.environ['REVIEW_TYPEHEAD'] if TYPEHEAD else ''}{'_geom' if os.environ.get('REVIEW_GEOM')=='1' else ''}{'_ceiling' if os.environ.get('REVIEW_CEILING')=='1' else ''}{'_contact' if os.environ.get('REVIEW_CONTACT')=='1' else ''}.json",{'grid_share':GRID,'curves':res,'cost':COST,'clips':len(clips),
                                                         'per_match':{m:{k:v for k,v in f.items() if not k.startswith('_')} for m,f in zip(sorted({c['youtube_id'] for c in clips}),folds)}})
         print('share         ',' '.join(f'{g:5.2f}' for g in GRID))
         for k,v in res.items():print(f"{k:14s}",' '.join(f'{x:.3f}' for x in v))
