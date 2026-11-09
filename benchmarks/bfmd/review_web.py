@@ -23,7 +23,9 @@ def bundle(match):
         b=rv.read(rv.STUDY/'frozen_review_lomo12.json')['bundles'][match]
         m=rv.Logistic();m.w,m.mu,m.sd=(np.array(b['hit_model'][k]) for k in ['w','mu','sd'])
         t=rv.Softmax();t.W,t.mu,t.sd=(np.array(b['type_model'][k]) for k in ['W','mu','sd'])
-        _models[match]={'model':m,'th':b['threshold'],'tmodel':t,'E':rv.ErrorModels.load(b['error_models']),
+        h=None
+        if b.get('head'):h=rv.Softmax();h.W,h.mu,h.sd=(np.array(b['head'][k]) for k in ['W','mu','sd'])
+        _models[match]={'model':m,'th':b['threshold'],'tmodel':t,'E':rv.ErrorModels.load(b['error_models']),'head':h,'auto':b.get('auto_pass'),
                         'lr':{k=='True':v for k,v in b['suspicion_lr'].items()},'trans':np.full((len(rv.TYPES),)*2,1/len(rv.TYPES))}
     return _models[match]
 
@@ -72,7 +74,13 @@ def session(clip_id):
         actions=json.loads(f.read_text())['actions'] if f.exists() else []
         key=(clip_id,len(actions))
         if key not in _cache:
-            m=bundle(c['youtube_id']);r=rv.Rally(c,m['model'],m['th'],m['tmodel'],m['trans'],0)
+            m=bundle(c['youtube_id']);cs=rv.cached_candidates(c);k=c['clip_id']
+            if m['head'] is not None and cs and rv._CANDS[k][0].get('head') is None:  # BFMD stroke-type head on BST features (evidence for the error models)
+                emb=rv.bst_embeddings(c)[0]
+                for x,p in zip(rv._CANDS[k],rv.proba(m['head'],[emb[x['frame']] for x in rv._CANDS[k]])):x['head']=p
+            r=rv.Rally(c,m['model'],m['th'],m['tmodel'],m['trans'],0);before={i for i,x in enumerate(r.c) if x['inlog']}
+            if m['auto'] is not None:rv.auto_pass(r,m['E'],m['auto'])  # second automatic check before the reviewer sees the log
+            after={i for i,x in enumerate(r.c) if x['inlog']};r.auto={'removed':len(before-after),'added':len(after-before)}
             for a in actions:apply(r,a['index'],a['action'],a.get('label'),a.get('time'))
             _cache.clear();_cache[key]=r
         return c,_cache[key],actions
@@ -102,11 +110,11 @@ def evidence(r,i,routes,xy):
     agree={k:any(abs(g-f)<=WIN for g in v) for k,v in routes.items()}
     post=dict(zip(rv.TYPES,x['post'])) if x.get('post') is not None else {}
     up=lambda q:x['odds']*q/(1-q+1e-9)/(1+x['odds']*q/(1-q+1e-9));E=bundle(r.clip['youtube_id'])['E'];fe=rv.evidence_x(r,x)
-    pf=up(E.p('fp',fe)) if x['inlog'] else None;pm=min(pf,up(E.p('mt',fe))) if x['inlog'] else None
+    pf,pm,pt,pr=rv.error_probs(r,x,E,fe,up)
     ev={'index':i,'time':round(x['time'],3),'frame':f,'inlog':x['inlog'],'locked':x['locked'],'retimed':bool(x.get('retimed')),'label':x['label'],
         'hitter':'near' if x['traj'][14]>.5 else 'far','p_hit':round(x['p_hit'],3),
         'p_false':round(pf,3) if x['inlog'] else None,'p_mistimed':round(pm,3) if x['inlog'] else None,
-        'p_type':round(up(E.p('ty',fe)),3) if x['inlog'] else None,'p_real':round(up(E.p('miss',fe)),3) if not x['inlog'] else None,
+        'p_type':round(pt,3) if x['inlog'] else None,'p_real':round(pr,3) if not x['inlog'] else None,'auto':x['auto'][0] if x.get('auto') else None,
         'racket':round(float(np.expm1(x['racket'])),2),
         'sound':round(float(np.expm1(x['x'][11])),2),
         'suggest_time':round(x['tev'][0]/30,3) if abs(x['tev'][0]-f)>3 and x['tev'][1]>=SUGGEST else None,'suggest_ratio':round(float(np.exp(x['tev'][1])),1),
@@ -119,7 +127,7 @@ def evidence(r,i,routes,xy):
         'path_start':max(0,f-15)}
     pr=rv.priority(r,x,'evidence',{'E':E});ev['priority']=round(pr,4) if pr is not None else None
     if x['locked']:ev['reason']=None
-    elif not x['inlog']:ev['reason']='可能漏了一拍'
+    elif not x['inlog']:ev['reason']='可能被误删' if x.get('auto') else '可能漏了一拍'
     else:  # the error kind with the largest expected joint-F1 gain
         g={'时刻可能记偏':pm*rv.GAIN['retime'],'可能不是击球':(pf-pm)*rv.GAIN['false'],'球种可能判错':(1-pf)*ev['p_type']*rv.GAIN['type']}
         ev['reason']=max(g,key=g.get)
@@ -149,7 +157,7 @@ def state(clip_id):
     return {'clip':{'clip_id':clip_id,'match':c['match_id'],'duration':c['duration_seconds'],'video':f'/review-video/{clip_id}'},
             'routes':{k:[round(v/30,3) for v in vs] for k,vs in routes.items()},'items':items,'queue':[e['index'] for e in queue],
             'reviewed':len(actions),'review_seconds':round(sum(cost(a,actions[k-1] if k else None) for k,a in enumerate(actions)),1),
-            'expected_errors':round(expected,2),'log_size':len(log),
+            'expected_errors':round(expected,2),'log_size':len(log),'auto':r.auto,
             'reference':{'joint_f1':round(2*tp/(2*tp+fp+fn),3) if 2*tp+fp+fn else None,'note':'BFMD 参考答案，仅研究演示'},
             'types':rv.TYPES}
 

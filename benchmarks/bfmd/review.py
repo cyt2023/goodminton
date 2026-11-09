@@ -37,6 +37,43 @@ def cached_candidates(clip):
         _CANDS[clip['clip_id']]=cs
     return copy.deepcopy(_CANDS[clip['clip_id']])
 
+TYPEHEAD=os.environ.get('REVIEW_TYPEHEAD','0') in ('1','2')  # BFMD stroke-type head on BST features: 1 in the type model and the error models, 2 error models only
+_EMB={}
+def bst_embeddings(clip):
+    """Input of the BST-0 and BST-CG-AP classification heads (300 + 300) in a +-1 s window: at every candidate frame, and at every
+    typed reference contact (the latter only to train the BFMD head on training matches)."""
+    k=clip['clip_id']
+    if k not in _EMB:
+        from specialist_bst import SpecialistBST
+        from benchmarks.bfmd.study_hits import calibration
+        pf=STUDY/'perception'/k;dense=read(pf/'dense_pose.json');ball=read(pf/'tracknetv3/trajectory.json')
+        m=SpecialistBST(dense,ball,calibration(read(STUDY/'court_review.json')['matches'][clip['youtube_id']]['corners_TL_TR_BL_BR']));grab={}
+        hooks=[m.model.mlp_head.register_forward_pre_hook(lambda mod,inp:grab.__setitem__(0,inp[0][0].detach().numpy().copy())),
+               m.full_model.mlp_head.register_forward_pre_hook(lambda mod,inp:grab.__setitem__(1,inp[0][0].detach().numpy().copy()))]
+        n=len(dense['frames'])
+        def emb(f):
+            f=min(max(int(f),0),n-1);v,_=m.inputs({'frame_index':f,'start_frame':max(0,f-30),'end_frame':min(n-1,f+30),'peak_time':dense['frames'][f]['source_time']})
+            m.predict(v);return np.r_[grab[0],grab[1]]
+        mm=next(x for x in read(_R.parent/'03_数据/独立基准/BFMD/manifest.json')['matches'] if x['match_id']==clip['match_id'])
+        lo=clip['offset_seconds'];hi=lo+clip['duration_seconds']
+        _EMB[k]=({x['frame']:emb(x['frame']) for x in _CANDS[k]},[(emb(round((h['time']-lo)*30)),h['label']) for h in mm['hits'] if lo<=h['time']<hi and h['label'] in TYPES])
+        for h in hooks:h.remove()
+    return _EMB[k]
+
+def fit_head(clips):
+    """BFMD stroke-type head (softmax) on BST features at the reference contacts of the given clips."""
+    rows=[r for c in clips for r in bst_embeddings(c)[1]]
+    return Softmax().fit([e for e,_ in rows],[t for _,t in rows],l2=10.,steps=600)
+
+def attach_heads(clips,data,m,cache):
+    """Head probabilities on every candidate; a clip of match j is scored by a head that saw neither j nor the held-out match m."""
+    for c in clips:
+        j=c['youtube_id'];excl=frozenset({m,j})
+        if excl not in cache:cache[excl]=fit_head([d for d in clips if d['youtube_id'] not in excl])
+        E=bst_embeddings(c)[0]
+        for cs in (_CANDS[c['clip_id']],data[c['clip_id']][0]):
+            for x,p in zip(cs,proba(cache[excl],[E[x['frame']] for x in cs]) if cs else []):x['head']=p
+
 _ROUTES={}
 def route_types(clip,f):
     """Stroke-type evidence from every detector route that fired within +-3 frames: mean BST probabilities and each route's top type."""
@@ -184,7 +221,8 @@ def evidence_x(r,x):
     hitter alternation, timing evidence (sound / racket away from the logged moment) and stroke-type agreement across routes."""
     post=x.get('post');post=post if post is not None else np.full(len(TYPES),1/len(TYPES))
     lab=TYPES.index(x['label']) if x.get('label') else int(np.argmax(post));rm,rt=x['rtype']
-    return r.features(x)+[x.get('viol',0.),x['tev'][1],x['tev'][2],float(-(post*np.log(post+1e-9)).sum()),float(rm[lab]),float(np.mean([t==lab for t in rt])) if rt else .5]
+    head=[float(x['head'][lab]),float(int(np.argmax(x['head']))==lab)] if x.get('head') is not None else []
+    return r.features(x)+[x.get('viol',0.),x['tev'][1],x['tev'][2],float(-(post*np.log(post+1e-9)).sum()),float(rm[lab]),float(np.mean([t==lab for t in rt])) if rt else .5]+head
 
 # evidence_x columns grouped for ablations
 RALLY_COLS=(8,16,17,18,19,23)          # gap to neighbours, same-side neighbours, rhythm, hitter-alternation violation
@@ -226,6 +264,15 @@ def crossfit_error_models(train_clips,data,types,byid):
         rallies+=[Rally(c,model,th,tmodel,flat,0) for c in train_clips if c['youtube_id']==j]
     return {'all':ErrorModels().fit(rallies),'no rally structure':ErrorModels(RALLY_COLS).fit(rallies),'no new sources':ErrorModels(SOURCE_COLS).fit(rallies)}
 
+def error_probs(r,x,E,f,up,timing=True):
+    """(P false, P mistimed, P wrong type | real, P real if left out) for candidate x; items moved by auto_pass keep the probability that moved them."""
+    auto=x.get('auto')
+    if x['inlog']:
+        pf=up(auto[1]) if auto and auto[0]=='added' else up(E.p('fp',f))
+        pm=min(pf,up(E.p('mt',f))) if timing and not auto else 0.
+        return pf,pm,up(E.p('ty',f)),None
+    return None,None,None,up(auto[1]) if auto and auto[0]=='removed' else up(E.p('miss',f))
+
 def priority(r,x,policy,em=None):
     """Expected joint-F1 gain per second. 'confidence' = typical tool: logged hits only, lowest confidence first.
     'gain' = calibrated agent confidences (they already fuse the multi-detector evidence), F1-weighted gains,
@@ -235,10 +282,9 @@ def priority(r,x,policy,em=None):
         return (1-min(x['p_hit'],max(x['post'])))/COST['hit'] if x['inlog'] else None
     if policy=='evidence':  # error models over all evidence; reviewed neighbours raise / lower the odds
         up=lambda q:x['odds']*q/(1-q+1e-9)/(1+x['odds']*q/(1-q+1e-9));E=em['E'];f=evidence_x(r,x)
-        if x['inlog']:
-            pf=up(E.p('fp',f));pm=min(pf,up(E.p('mt',f))) if r.retime and not em.get('no_timing') else 0.;pt=up(E.p('ty',f))
-            return (pm*GAIN['retime']+(pf-pm)*GAIN['false']+(1-pf)*pt*GAIN['type'])/(COST['hit']+pm*COST['retime'])
-        return up(E.p('miss',f))*GAIN['miss']/COST['miss']
+        pf,pm,pt,pr=error_probs(r,x,E,f,up,r.retime and not em.get('no_timing'))
+        if x['inlog']:return (pm*GAIN['retime']+(pf-pm)*GAIN['false']+(1-pf)*pt*GAIN['type'])/(COST['hit']+pm*COST['retime'])
+        return pr*GAIN['miss']/COST['miss']
     if policy=='single_hit':return 1-min(1.,x['x'][9]) if x['inlog'] else None
     if policy=='single_type':return 1-x['x'][4] if x['inlog'] else None
     if policy=='single':  # typical tool: the detector's own hit score and the classifier's top probability, logged hits only
@@ -256,10 +302,10 @@ def priority(r,x,policy,em=None):
     pm=float(em['miss'].predict([[x['p_hit'],x['racket']]])[0]) if em and em.get('miss') else x['p_hit']  # racket contact evidence for missed hits
     return up(pm)*GAIN['miss']/COST['miss']
 
-def simulate(rallies,policy,em=None,propagate=False):
+def simulate(rallies,policy,em=None,propagate=False,full=None):
     """em: {'lr': {True: odds factor if the reviewed item was wrong, False: if right}} for suspicion propagation."""
     """Review in priority order; return pooled (tp,fp,fn) after spending each GRID share of the full-review cost."""
-    full=sum(len(r.log()) for r in rallies)*COST['hit']
+    full=full or sum(len(r.log()) for r in rallies)*COST['hit']  # override: keep the review budget of the original log
     counts=lambda:tuple(map(sum,zip(*[r.counts() for r in rallies])))
     out=[counts()];spent=0.;g=1
     items=[(r,i) for r in rallies for i,x in enumerate(r.c)]
@@ -333,6 +379,18 @@ def parity_model(rallies):
             if x['inlog'] and r.y[k] is not None:X.append([1-min(x['p_hit'],max(x['post'])),x.get('viol',0.)]);Y.append(float(r.wrong(k)))
     return Logistic().fit(X,Y,l2=1.)
 
+def auto_pass(r,E,th=.5):
+    """Second automatic verification before review: drop logged hits the error models call false, add left-out candidates they call real."""
+    drop=[];add=[]
+    for x in r.c:
+        f=evidence_x(r,x)
+        if x['inlog'] and (q:=E.p('fp',f)-E.p('mt',f))>th:drop.append((x,q))
+        elif not x['inlog'] and (q:=E.p('miss',f))>th:add.append((x,q))
+    # a moved item keeps the probability that moved it: P(real) = 1 - P(spurious) for a dropped hit, P(false) = 1 - P(real) for an added one
+    for x,q in drop:x['inlog']=False;x['auto']=('removed',1-q)
+    for x,q in add:x['inlog']=True;x['auto']=('added',1-q)
+    if drop or add:r.decode()
+
 def run_fold(train_clips,test_clips,model,th,tmodel,lam,E=None):
     flat=np.full((len(TYPES),len(TYPES)),1/len(TYPES))
     tr=[Rally(c,model,th,tmodel,flat,0) for c in train_clips];T=transitions(tr);lr={'lr':suspicion_lr(tr)};mm=miss_model(tr);pm=parity_model(tr);out={'_lr':lr['lr']}
@@ -343,6 +401,11 @@ def run_fold(train_clips,test_clips,model,th,tmodel,lam,E=None):
                             ('evidence - timing in ranking','evidence',{'E':E['all'],'no_timing':True},False)]
     for name,pol,em,prop in runs+[('oracle','oracle',None,False)]:
         out[name]=simulate([Rally(c,model,th,tmodel,T,lam) for c in test_clips],pol,em,prop)
+    if E is not None:  # second automatic pass by the error models, then the same review budget as the original log
+        for name,pol,em in [('auto pass + evidence','evidence',{'E':E['all']}),('auto pass + oracle','oracle',None)]:
+            rs=[Rally(c,model,th,tmodel,T,lam) for c in test_clips];full=sum(len(r.log()) for r in rs)*COST['hit']
+            for r in rs:auto_pass(r,E['all'])
+            out[name]=simulate(rs,pol,em,False,full)
     return out
 
 def f1(c):tp,fp,fn=c;return 2*tp/(2*tp+fp+fn)
@@ -356,13 +419,15 @@ if __name__=='__main__':
         clips=[c for c in read(STUDY/'clips.json')['clips'] if (ROUTES/c['clip_id']/f'{PRIMARY}.json').exists()]
         byid={c['clip_id']:c for c in clips};data={}
         for c in clips:cs=cached_candidates(c);data[c['clip_id']]=(cs,truth_labels(c,cs))
-        types={k:truth_types(byid[k],data[k][0]) for k in byid};bundles={}
+        types={k:truth_types(byid[k],data[k][0]) for k in byid};bundles={};hcache={}
         for m in sorted({c['youtube_id'] for c in clips}):
+            if TYPEHEAD:attach_heads(clips,data,m,hcache)
             train=[c for c in clips if c['youtube_id']!=m];model,th,tmodel=fit_both([c['clip_id'] for c in train],data,types,byid)
             E=crossfit_error_models(train,data,types,byid)['all'];flat=np.full((len(TYPES),)*2,1/len(TYPES))
             tr=[Rally(c,model,th,tmodel,flat,0) for c in train]
             bundles[m]={'hit_model':model.packet(),'threshold':th,'type_model':{'W':tmodel.W.tolist(),'mu':tmodel.mu.tolist(),'sd':tmodel.sd.tolist()},
-                        'error_models':E.packet(),'suspicion_lr':{str(k):v for k,v in suspicion_lr(tr).items()},'train_matches':sorted({c['youtube_id'] for c in train})}
+                        'error_models':E.packet(),'auto_pass':.5,
+                        'head':({'W':hcache[frozenset({m})].W.tolist(),'mu':hcache[frozenset({m})].mu.tolist(),'sd':hcache[frozenset({m})].sd.tolist()} if TYPEHEAD else None),'suspicion_lr':{str(k):v for k,v in suspicion_lr(tr).items()},'train_matches':sorted({c['youtube_id'] for c in train})}
             print('bundle',m,flush=True)
         save(STUDY/'frozen_review_lomo12.json',{'bundles':bundles,'cost':COST,'gain':GAIN,'code_sha256':code_hashes(),
                                                'note':'For clips of match m use bundles[m]: agent and error models fitted on the other 11 matches.'})
@@ -377,13 +442,14 @@ if __name__=='__main__':
                 for x in _CANDS[c['clip_id']]:
                     x['x'][1]=x['x'][10]=x['x'][11]=0.;x['tev']=(x['frame'],0.,0.);x['rtype']=(np.full(len(TYPES),1/len(TYPES)),[])
             cs=cached_candidates(c);data[c['clip_id']]=(cs,truth_labels(c,cs))
-        types={k:truth_types(byid[k],data[k][0]) for k in byid};folds=[]
+        types={k:truth_types(byid[k],data[k][0]) for k in byid};folds=[];hcache={}
         for m in sorted({c['youtube_id'] for c in clips}):
             train=[c for c in clips if c['youtube_id']!=m];test=[c for c in clips if c['youtube_id']==m]
+            if TYPEHEAD:attach_heads(clips,data,m,hcache)
             model,th,tmodel=fit_both([c['clip_id'] for c in train],data,types,byid)
             E=crossfit_error_models(train,data,types,byid)
             folds.append(run_fold(train,test,model,th,tmodel,0,E));print('fold',m,len(test),'clips',flush=True)
-        res=pool(folds);save(STUDY/f"review_lomo12{'_ablate_'+ablate if ablate else ''}{'' if RETIME_ON else '_noretime'}.json",{'grid_share':GRID,'curves':res,'cost':COST,'clips':len(clips),
+        res=pool(folds);save(STUDY/f"review_lomo12{'_ablate_'+ablate if ablate else ''}{'' if RETIME_ON else '_noretime'}{'_typehead'+os.environ['REVIEW_TYPEHEAD'] if TYPEHEAD else ''}.json",{'grid_share':GRID,'curves':res,'cost':COST,'clips':len(clips),
                                                         'per_match':{m:{k:v for k,v in f.items() if not k.startswith('_')} for m,f in zip(sorted({c['youtube_id'] for c in clips}),folds)}})
         print('share         ',' '.join(f'{g:5.2f}' for g in GRID))
         for k,v in res.items():print(f"{k:14s}",' '.join(f'{x:.3f}' for x in v))

@@ -21,6 +21,7 @@ STUDY=ROOT.parent/'03_数据/独立基准/BFMD/pipeline_study'
 VARIANT=os.environ.get('BFMD_VARIANT','v3');ROUTES=STUDY/f'routes_{VARIANT}'
 PRIMARY='tn3__gru_shared';WIN=3;ADD_SUPPORT=3
 USE_ALT=os.environ.get('VERIFY_ALT','1')=='1'  # author-window BST re-check tool
+HEAD_IN_TYPE=os.environ.get('REVIEW_TYPEHEAD','0')=='1'  # 2: the BFMD head is evidence for the error models only
 
 def read(p):return json.loads(Path(p).read_text())
 def save(p,v):Path(p).parent.mkdir(parents=True,exist_ok=True);Path(p).write_text(json.dumps(v,ensure_ascii=False,indent=1,allow_nan=False)+'\n')
@@ -152,6 +153,7 @@ def type_x(kept,j,alt=None):
     """BST probs (both), flight, and neighbouring candidates' BST probs as rally context."""
     c=kept[j];p0,p1=c['probs'];x=type_vec(p0)+(type_vec(p1) if p1 else type_vec(p0))+c['traj']
     if alt is not None:x+=type_vec(alt[j][0])+type_vec(alt[j][1])  # author-window re-check
+    if c.get('head') is not None and HEAD_IN_TYPE:x+=list(c['head'])+list(c['rtype'][0])  # BFMD head on BST features; BST averaged over detector routes
     for k in (j-1,j+1):
         nb=kept[k] if 0<=k<len(kept) and abs(kept[k]['time']-c['time'])<=2.5 else None
         x+=type_vec(nb['probs'][0]) if nb else [0.]*len(TYPES)
