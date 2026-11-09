@@ -26,7 +26,7 @@ video{display:block;width:100%;border-radius:12px;background:#183126;aspect-rati
 .queue li{display:flex;justify-content:space-between;gap:8px;padding:7px 9px;border-radius:9px;cursor:pointer;border:1px solid transparent}
 .queue li:hover{background:var(--pale)}.queue li.sel{border-color:#6d8c61;background:#eef4ea}
 .chip{font-size:12px;padding:1px 8px;border-radius:999px;background:#f6efe1;color:#72542c;white-space:nowrap}
-.chip.miss{background:#e9eef7;color:#334f7c}.chip.type{background:#f3e7ef;color:#6b3a5a}
+.chip.miss{background:#e9eef7;color:#334f7c}.chip.type{background:#f3e7ef;color:#6b3a5a}.chip.time{background:#e4f1ea;color:#2f6249}
 .prob{display:flex;align-items:center;gap:8px;font-size:13px;margin:3px 0}
 .prob .track{flex:1;height:8px;background:var(--pale);border-radius:4px;overflow:hidden}.prob .fill{height:100%;background:var(--warn)}
 .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -88,7 +88,7 @@ video{display:block;width:100%;border-radius:12px;background:#183126;aspect-rati
       <h3>你的判断</h3>
       <div class="bar" id="evActions"></div>
       <div class="types" id="evTypes"></div>
-      <p class="muted">快捷键：Enter 判断正确 · X 不是击球 · 空格重播这一拍</p>
+      <p class="muted">快捷键：Enter 判断正确 · X 不是击球 · T 时刻挪到当前画面 · 空格重播这一拍</p>
     </div>
   </section>
 </div>
@@ -102,15 +102,15 @@ let S=null,sel=null,loop=null;
 async function api(path,body){const r=await fetch(path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json','X-Session-Token':token},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.error||'暂时无法读取');return d}
 function risk(e){return e.inlog?(e.p_false||0)+(1-(e.p_false||0))*(e.p_type||0):(e.p_real||0)}
 function color(e){if(e.locked)return e.inlog?'#315b44':'#b9bdb5';const p=risk(e);return p<.2?'#4f8a5b':p<.45?'#c9822b':'#b4472f'}
-async function loadClips(){const d=await api('/api/review');const c=$('clip');d.clips.sort((a,b)=>(a.role===b.role?0:a.role==='new_test'?-1:1));
-  c.innerHTML=d.clips.map(x=>`<option value="${x.clip_id}">${x.role==='new_test'?'新回合':'开发'} · ${x.match.split('-').slice(-6).join(' ')} · ${x.duration}s${x.reviewed?' · 已核对'+x.reviewed:''}</option>`).join('');
+async function loadClips(){const d=await api('/api/review');const c=$('clip');d.clips.sort((a,b)=>a.match.localeCompare(b.match));
+  c.innerHTML=d.clips.map(x=>`<option value="${x.clip_id}">${x.match.split('-').slice(0,-6).join(' ').replace(/^(KAPAL API|PETRONAS|VICTOR|YONEX) /,'')} · ${x.match.split('-').slice(-6).join(' ')} · ${x.duration}s${x.reviewed?' · 已核对'+x.reviewed:''}</option>`).join('');
   const q=new URLSearchParams(location.search),want=q.get('clip');if(want)c.value=want;$('research').checked=q.has('research');await load()}
 async function load(){$('err').textContent='';$('evidence').hidden=true;sel=null;$('sExpected').textContent='加载中…';
   try{S=await api('/api/review/'+$('clip').value);$('video').src=S.clip.video;render();if(S.queue.length)select(S.queue[0],false)}catch(e){$('err').textContent=e.message}}
 function render(){$('sReviewed').textContent=S.reviewed;$('sSeconds').textContent=S.review_seconds+' 秒';$('sExpected').textContent=S.expected_errors;$('sLog').textContent=S.log_size;
   $('sRef').hidden=!$('research').checked;$('sRef').textContent=`与 BFMD 参考答案对比：联合 F1 = ${S.reference.joint_f1}`;
   const q=S.queue.slice(0,8).map(i=>S.items[i]);
-  $('queue').innerHTML=q.length?q.map(e=>`<li data-i="${e.index}" class="${sel===e.index?'sel':''}"><span>${e.time.toFixed(1)}s · ${e.inlog?nm(e.label):'可能漏掉的一拍'}</span><span class="chip ${e.inlog?(e.reason==='球种可能判错'?'type':''):'miss'}">${e.reason}</span></li>`).join(''):'<li>没有需要核对的了</li>';
+  $('queue').innerHTML=q.length?q.map(e=>`<li data-i="${e.index}" class="${sel===e.index?'sel':''}"><span>${e.time.toFixed(1)}s · ${e.inlog?nm(e.label):'可能漏掉的一拍'}</span><span class="chip ${e.inlog?(e.reason==='球种可能判错'?'type':e.reason==='时刻可能记偏'?'time':''):'miss'}">${e.reason}</span></li>`).join(''):'<li>没有需要核对的了</li>';
   $('queue').querySelectorAll('li[data-i]').forEach(li=>li.onclick=()=>select(+li.dataset.i));
   drawTimeline();if(sel!==null)showEvidence()}
 function drawTimeline(){const svg=$('timeline'),W=svg.clientWidth||800,rows=Object.keys(S.routes),H=46+rows.length*12+18,L=86;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('height',H);
@@ -129,16 +129,18 @@ function showEvidence(){const e=S.items[sel];$('evidence').hidden=false;
   const seq=S.items.filter(x=>x.inlog).sort((a,b)=>a.time-b.time),pos=seq.findIndex(x=>x.index===e.index),prev=seq.filter(x=>x.time<e.time).pop(),next=seq.find(x=>x.time>e.time);
   $('evTitle').innerHTML=`${e.time.toFixed(2)}s · ${e.inlog?`第 ${pos+1} 拍，判为「${nm(e.label)}」`:'可能漏掉的一拍'} · ${e.hitter==='near'?'近端':'远端'}球员 ${e.locked?'<span class="chip">已核对</span>':e.reason?`<span class="chip">${e.reason}</span>`:''}`;
   const P=(t,p)=>p==null?'':`<div class="prob"><span style="width:118px">${t}</span><span class="track"><span class="fill" style="display:block;width:${Math.round(p*100)}%"></span></span><span>${Math.round(p*100)}%</span></div>`;
-  $('evProbs').innerHTML=e.inlog?P('不是击球的可能',e.p_false)+P('球种判错的可能',e.p_type):P('确实有一拍的可能',e.p_real);
+  $('evProbs').innerHTML=e.inlog?P('不是击球的可能',e.p_false)+P('其中：时刻记偏',e.p_mistimed)+P('球种判错的可能',e.p_type):P('确实有一拍的可能',e.p_real);
   $('evDets').innerHTML=`<span class="muted" style="width:100%">${Object.keys(e.detectors).length} 个找拍器中 ${e.support} 个在这里报了击球</span>`+Object.entries(e.detectors).map(([k,v])=>{const[p,m]=k.split('__');return `<span class="det ${v?'on':''}">${p==='tn3'?'TNv3':'RV'} ${RNAMES[m]||m}</span>`}).join('');
   $('evRacket').innerHTML=e.racket>=9?'这段时间没有检测到球拍。':`击球前后 3 帧内，球离拍头最近约 <b>${e.racket.toFixed(2)}</b> 个拍长（${e.racket<0.5?'很近，像是真的击中':e.racket<1.5?'较近':'较远，可能并没有击中'}）`;
-  $('evSound').innerHTML=`击球声：这一刻高频瞬态约为本回合平常水平的 <b>${e.sound.toFixed(1)}</b> 倍（${e.sound>=4?'很明显':e.sound>=2?'有一些':'几乎听不到'}；已按这场比赛的声画延迟对齐）`;
+  $('evSound').innerHTML=`击球声：这一刻高频瞬态约为本回合平常水平的 <b>${e.sound.toFixed(1)}</b> 倍（${e.sound>=4?'很明显':e.sound>=2?'有一些':'几乎听不到'}；已按这场比赛的声画延迟对齐）`+(e.suggest_time!=null&&e.inlog&&!e.locked?`<br>附近 <b>${e.suggest_time.toFixed(2)}s</b> 处有更强的击球声（比记录${e.suggest_time>e.time?'晚':'早'} ${Math.abs(e.suggest_time-e.time).toFixed(2)}s，强 ${e.suggest_ratio} 倍），可以看看这一拍的时刻是否记偏。<button id="aJump">跳到那一刻</button>`:'');
+  if($('aJump'))$('aJump').onclick=()=>{const v=$('video');v.pause();clearInterval(loop);v.currentTime=e.suggest_time};
   $('evParity').innerHTML=e.same_player==null?'这是一个漏拍候选，确认后会重新检查前后击球的交替。':`与前后相邻击球像是<b>同一名球员</b>连续击球的可能约 <b>${Math.round(e.same_player*100)}%</b>（${e.same_player>=.6?'不符合两人轮流击球，附近很可能有误报或漏拍':'符合两人轮流击球'}）`;
   $('evCands').innerHTML=`<div class="cand"><div class="lab">综合判断</div>${bars(e.stacked)}</div><div class="cand"><div class="lab">BST（原窗口）</div>${bars(e.bst0)}</div><div class="cand"><div class="lab">BST（按作者规则）</div>${bars(e.author_window)}</div>`;
   drawPath(e);$('evContext').innerHTML=`<span>上一拍：${prev?nm(prev.label)+' · '+(e.time-prev.time).toFixed(1)+'s 前':'无'}</span><span>下一拍：${next?nm(next.label)+' · '+(next.time-e.time).toFixed(1)+'s 后':'无'}</span>`;
   const A=$('evActions'),T=$('evTypes');A.innerHTML='';T.innerHTML='';
-  if(e.locked){A.innerHTML='<span class="muted">这一拍已核对。</span>';return}
-  if(e.inlog){A.innerHTML=`<button class="primary" id="aOk">判断正确 ✓</button><button class="danger" id="aNo">不是击球</button><span class="muted">或改成：</span>`;$('aOk').onclick=()=>send('confirm');$('aNo').onclick=()=>send('reject')}
+  if(e.locked&&!e.retimed){A.innerHTML='<span class="muted">这一拍已核对。</span>';return}
+  if(e.locked){A.innerHTML='<span class="muted">时刻已改。球种如果也不对，点下面改：</span>'}
+  else if(e.inlog){A.innerHTML=`<button class="primary" id="aOk">判断正确 ✓</button><button class="danger" id="aNo">不是击球</button><button id="aMove">时刻不对：挪到当前画面</button><span class="muted">或改成：</span>`;$('aOk').onclick=()=>send('confirm');$('aNo').onclick=()=>send('reject');$('aMove').onclick=()=>send('retime',e.label,$('video').currentTime)}
   else{A.innerHTML=`<button class="danger" id="aNo">没有漏拍</button><span class="muted">确实漏了，球种是：</span>`;$('aNo').onclick=()=>send('dismiss')}
   T.innerHTML=S.types.map(t=>`<button data-t="${t}" ${t===e.label&&e.inlog?'disabled':''}>${nm(t)}</button>`).join('');
   T.querySelectorAll('button').forEach(b=>b.onclick=()=>send(e.inlog?'retype':'add',b.dataset.t))}
@@ -149,13 +151,13 @@ function drawPath(e){const svg=$('evPath'),W=svg.clientWidth||320,H=110,pts=e.pa
   pts.forEach((p,i)=>{if(i)h+=`<line x1="${X(pts[i-1][1])}" y1="${Y(pts[i-1][2])}" x2="${X(p[1])}" y2="${Y(p[2])}" stroke="${p[0]<=c?'#7a9cc6':'#315b44'}" stroke-width="2"/>`});
   const hit=pts.reduce((a,p)=>Math.abs(p[0]-c)<Math.abs(a[0]-c)?p:a);h+=`<circle cx="${X(hit[1])}" cy="${Y(hit[2])}" r="5" fill="#b4472f"/>`;
   h+=`<text x="${W-8}" y="${H-4}" font-size="10" text-anchor="end" fill="#6d7e73">蓝：击球前 · 绿：击球后</text>`;svg.innerHTML=h}
-async function send(action,label){try{const i=sel;S=await api('/api/review/'+$('clip').value,{index:i,action,label});const nxt=S.queue[0];if(nxt!==undefined)select(nxt,false);else{sel=null;render()}}catch(e){$('err').textContent=e.message}}
+async function send(action,label,time){try{const i=sel;S=await api('/api/review/'+$('clip').value,{index:i,action,label,time});const nxt=action==='retime'?i:S.queue[0];if(nxt!==undefined)select(nxt,false);else{sel=null;render()}}catch(e){$('err').textContent=e.message}}
 $('clip').onchange=()=>{history.replaceState(null,'','?clip='+$('clip').value);load()};
 $('research').onchange=()=>S&&render();
 $('reset').onclick=async()=>{if(!confirm('清空这个回合的核对记录？'))return;S=await api('/api/review/'+$('clip').value,{reset:true});sel=null;$('evidence').hidden=true;render()};
 $('video').ontimeupdate=()=>{const ph=document.getElementById('playhead');if(!ph||!S)return;const W=$('timeline').clientWidth,L=86,x=L+(W-L-10)*$('video').currentTime/S.clip.duration;ph.setAttribute('x1',x);ph.setAttribute('x2',x)};
 document.addEventListener('keydown',ev=>{if(sel===null||ev.target.tagName==='SELECT')return;const e=S.items[sel];if(e.locked)return;
-  if(ev.key==='Enter'&&e.inlog){ev.preventDefault();send('confirm')}else if((ev.key==='x'||ev.key==='X')){send(e.inlog?'reject':'dismiss')}else if(ev.key===' '){ev.preventDefault();play(e.time)}});
+  if(ev.key==='Enter'&&e.inlog){ev.preventDefault();send('confirm')}else if((ev.key==='x'||ev.key==='X')){send(e.inlog?'reject':'dismiss')}else if((ev.key==='t'||ev.key==='T')&&e.inlog){send('retime',e.label,$('video').currentTime)}else if(ev.key===' '){ev.preventDefault();play(e.time)}});
 window.onresize=()=>S&&render();
 loadClips().catch(e=>$('err').textContent=e.message);
 </script>

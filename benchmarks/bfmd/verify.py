@@ -82,6 +82,23 @@ def racket_contact(clip,f,w=3):
             kp=np.array(r['keypoints']);b=np.array(r['bbox'][0])
             best=min(best,float(np.linalg.norm(xy[t]-kp[[0,3,4]].mean(0))/(np.hypot(b[2]-b[0],b[3]-b[1])+1e-6)))
     return float(np.log1p(min(best,9.)))
+def timing_evidence(clip,f,w=9):
+    """Where does the evidence put the contact? Strongest impact sound and closest racket approach within +-w frames.
+    Returns (suggested frame, log(sound at suggestion / sound at f), racket distance gain at the suggestion)."""
+    k=clip['clip_id'];racket_contact(clip,f);rk,xy=_RK[k];lag=match_lag(clip);t,fl=audio.flux(clip['path'])
+    def snd(g):
+        m=(t>=g/30+lag-1/60)&(t<g/30+lag+1/60);return float(fl[m].max()) if m.any() else 0.
+    def rac(g):
+        best=9.
+        if 0<=g<min(len(xy),len(rk)) and not np.isnan(xy[g]).any():
+            for r in rk[g]['rackets']:
+                kp=np.array(r['keypoints']);b=np.array(r['bbox'][0])
+                best=min(best,float(np.linalg.norm(xy[g]-kp[[0,3,4]].mean(0))/(np.hypot(b[2]-b[0],b[3]-b[1])+1e-6)))
+        return best
+    frames=range(f-w,f+w+1);S=[snd(g) for g in frames];R=[rac(g) for g in frames]
+    here=max(S[w-1:w+2]);g=int(np.argmax(S))
+    return f-w+g,float(np.log((S[g]+1e-6)/(here+1e-6))),float(min(R[w-1:w+2])-R[g]) if min(R)<9 else 0.
+
 def court_h(clip):
     import cv2
     rec=read(STUDY/'court_review.json')['matches'][clip['youtube_id']]['corners_TL_TR_BL_BR']
