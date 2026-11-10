@@ -659,7 +659,7 @@ if __name__=='__main__':
             model,th,tmodel=fit_both([c['clip_id'] for c in train],data,types,byid)
             E=crossfit_error_models(train,data,types,byid)
             folds.append(run_fold(train,test,model,th,tmodel,0,E));print('fold',m,len(test),'clips',flush=True)
-        res=pool(folds);save(STUDY/f"review_lomo12{'_ablate_'+ablate if ablate else ''}{'' if RETIME_ON else '_noretime'}{'_typehead'+os.environ['REVIEW_TYPEHEAD'] if TYPEHEAD else ''}{'_geom' if os.environ.get('REVIEW_GEOM')=='1' else ''}{'_ceiling' if os.environ.get('REVIEW_CEILING')=='1' else ''}{'_contact' if os.environ.get('REVIEW_CONTACT')=='1' else ''}.json",{'grid_share':GRID,'curves':res,'cost':COST,'clips':len(clips),
+        res=pool(folds);save(STUDY/f"review_lomo12{'_ablate_'+ablate if ablate else ''}{'' if RETIME_ON else '_noretime'}{'_typehead'+os.environ['REVIEW_TYPEHEAD'] if TYPEHEAD else ''}{'_geom' if os.environ.get('REVIEW_GEOM')=='1' else ''}{'_ceiling' if os.environ.get('REVIEW_CEILING')=='1' else ''}{'_contact' if os.environ.get('REVIEW_CONTACT')=='1' else ''}{'_l2'+os.environ['VERIFY_TYPE_L2'] if os.environ.get('VERIFY_TYPE_L2','10')!='10' else ''}.json",{'grid_share':GRID,'curves':res,'cost':COST,'clips':len(clips),
                                                         'per_match':{m:{k:v for k,v in f.items() if not k.startswith('_')} for m,f in zip(sorted({c['youtube_id'] for c in clips}),folds)}})
         print('share         ',' '.join(f'{g:5.2f}' for g in GRID))
         for k,v in res.items():print(f"{k:14s}",' '.join(f'{x:.3f}' for x in v))

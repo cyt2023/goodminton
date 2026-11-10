@@ -22,6 +22,7 @@ VARIANT=os.environ.get('BFMD_VARIANT','v3');ROUTES=STUDY/f'routes_{VARIANT}'
 PRIMARY='tn3__gru_shared';WIN=3;ADD_SUPPORT=3
 USE_ALT=os.environ.get('VERIFY_ALT','1')=='1'  # author-window BST re-check tool
 HEAD_IN_TYPE=os.environ.get('REVIEW_TYPEHEAD','0')=='1'  # 2: the BFMD head is evidence for the error models only
+TYPE_L2=float(os.environ.get('VERIFY_TYPE_L2','10'))  # L2 of the stacked stroke-type softmax (3 before 2026-11-10; 10 is better in 12-match leave-one-match-out)
 GEOM=os.environ.get('REVIEW_GEOM','0')=='1'  # rally geometry for the stroke type: where and when the previous / next contact happens
 
 def read(p):return json.loads(Path(p).read_text())
@@ -251,7 +252,7 @@ def fit_both(train,data,types,byid):
         seq=[x for x,_ in keep(model,th,data[k][0])];ty={id(x):t for x,t in zip(data[k][0],types[k])};alt=author_window_probs(byid[k],seq) if USE_ALT and seq else None
         for j,x in enumerate(seq):
             if ty.get(id(x)):X.append(type_x(seq,j,alt));Y.append(ty[id(x)])
-    return model,th,Softmax().fit(X,Y)
+    return model,th,Softmax().fit(X,Y,l2=TYPE_L2)
 
 def dev_data():
     clips=[c for c in read(STUDY/'clips.json')['clips'] if in_role(c,'dev') and (ROUTES/c['clip_id']).exists()]
