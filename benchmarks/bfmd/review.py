@@ -150,7 +150,7 @@ class Rally:
         alt=author_window_probs(self.clip,seq)
         E=proba(self.tmodel,[type_x(ctx,j,alt) for j in range(len(seq))])
         for x,e,a in zip(seq,E,alt):x['tp']=e;x['alt']=a
-        k=len(TYPES);em=np.array([np.eye(k)[TYPES.index(x['clamp'])] if x['clamp'] else x['tp'] for x in seq])+1e-9
+        k=len(TYPES);em=np.array([np.eye(k)[TYPES.index(x['clamp'])] if x['clamp'] else (x['tpe'] if x.get('tpe') is not None else x['tp']) for x in seq])+1e-9
         T=self.trans**self.lam
         f=np.zeros_like(em);b=np.ones_like(em);f[0]=em[0]/em[0].sum()
         for t in range(1,len(seq)):
@@ -532,7 +532,7 @@ def contact_pass(r,cmod,pdup,delta=CDELTA):
     if not xs:return
     F=ct.frame_features(r.clip);S=cmod.scores(np.stack([ct.window(F,x['frame']) for x in xs]))
     for x,s in zip(xs,S):
-        p=int(np.argmax(s));z=float(np.logaddexp.reduce(s));x['cscore']=float(s[ct.W])-z;x['cbest']=x['frame']+p-ct.W;x['cprob']=float(np.exp(s[p]-z))
+        s=np.where((x['frame']+np.arange(len(s))-ct.W>=0)&(x['frame']+np.arange(len(s))-ct.W<len(F)),s,-np.inf);p=int(np.argmax(s));z=float(np.logaddexp.reduce(s));x['cscore']=float(s[ct.W])-z;x['cbest']=x['frame']+p-ct.W;x['cprob']=float(np.exp(s[p]-z))
         if s[p]-s[ct.W]>delta:x['frame']+=p-ct.W;x['time']=x['frame']/30;x['cscore']=float(s[p])-z;x['cmoved']=True
     dedupe(r,pdup);relabel(r);r.decode()
 
@@ -564,12 +564,24 @@ def run_fold(train_clips,test_clips,model,th,tmodel,lam,E=None):
     flat=np.full((len(TYPES),len(TYPES)),1/len(TYPES))
     if os.environ.get('REVIEW_CONTACT')=='1' and E is not None:  # contact-time model: timing fixes and duplicate merging before / during review
         tr=[Rally(c,model,th,tmodel,flat,0) for c in train_clips];cmod=fit_contact_model(train_clips,tr);pdup=dup_rate(tr);out={'_pdup':pdup}
+        tens=det=None;DENSE=os.environ.get('REVIEW_DENSE')=='1'
+        if DENSE:from benchmarks.bfmd import dense
+        if os.environ.get('REVIEW_TYPEENS')=='1':  # stroke-type ensemble fitted on the training matches' logs after their automatic passes
+            from benchmarks.bfmd import typeens
+            for r in tr:auto_pass(r,E['all']);contact_pass(r,cmod,pdup)
+            if DENSE:  # dense hit detector on the training matches' annotated contacts
+                det=dense.Detector().fit(train_clips)
+                for r in tr:dense.dense_pass(r,det)
+            tens=typeens.fit(tr,train_clips)
         for name,pol,useC,prop in [('auto pass + evidence','evidence',False,False),('auto pass + contact + evidence','evidence',True,False),
                                    ('auto pass + contact + evidence + propagation','evidence',True,True),('auto pass + contact + oracle','oracle',True,False)]:
             rs=[Rally(c,model,th,tmodel,flat,lam) for c in test_clips];full=sum(len(r.log()) for r in rs)*COST['hit']
             for r in rs:
                 auto_pass(r,E['all'])
                 if useC:contact_pass(r,cmod,pdup)
+                if useC and det is not None:dense.dense_pass(r,det)
+                if useC and tens is not None:typeens.type_pass(r,tens)
+            if useC and prop:out['_type']=[sum(1 for i,x in enumerate(r.c) if x['inlog'] and r.y[i]==1 and r.ty[i] and x['label']==r.ty[i]) for r in rs],[sum(1 for i,x in enumerate(r.c) if x['inlog'] and r.y[i]==1 and r.ty[i]) for r in rs]
             em={'E':E['all'],'contact':pdup} if pol=='evidence' and prop else ({'E':E['all']} if pol=='evidence' else None)
             out[name]=simulate(rs,pol,em,prop,full)
         return out
@@ -659,7 +671,8 @@ if __name__=='__main__':
             model,th,tmodel=fit_both([c['clip_id'] for c in train],data,types,byid)
             E=crossfit_error_models(train,data,types,byid)
             folds.append(run_fold(train,test,model,th,tmodel,0,E));print('fold',m,len(test),'clips',flush=True)
-        res=pool(folds);save(STUDY/f"review_lomo12{'_ablate_'+ablate if ablate else ''}{'' if RETIME_ON else '_noretime'}{'_typehead'+os.environ['REVIEW_TYPEHEAD'] if TYPEHEAD else ''}{'_geom' if os.environ.get('REVIEW_GEOM')=='1' else ''}{'_ceiling' if os.environ.get('REVIEW_CEILING')=='1' else ''}{'_contact' if os.environ.get('REVIEW_CONTACT')=='1' else ''}{'_l2'+os.environ['VERIFY_TYPE_L2'] if os.environ.get('VERIFY_TYPE_L2','10')!='10' else ''}.json",{'grid_share':GRID,'curves':res,'cost':COST,'clips':len(clips),
+        if '_type' in folds[0]:print('stroke type among found hits',sum(sum(f['_type'][0]) for f in folds),'/',sum(sum(f['_type'][1]) for f in folds),flush=True)
+        res=pool(folds);save(STUDY/f"review_lomo12{'_ablate_'+ablate if ablate else ''}{'' if RETIME_ON else '_noretime'}{'_typehead'+os.environ['REVIEW_TYPEHEAD'] if TYPEHEAD else ''}{'_geom' if os.environ.get('REVIEW_GEOM')=='1' else ''}{'_ceiling' if os.environ.get('REVIEW_CEILING')=='1' else ''}{'_contact' if os.environ.get('REVIEW_CONTACT')=='1' else ''}{'_dense' if os.environ.get('REVIEW_DENSE')=='1' else ''}{'_typeens' if os.environ.get('REVIEW_TYPEENS')=='1' else ''}{'_l2'+os.environ['VERIFY_TYPE_L2'] if os.environ.get('VERIFY_TYPE_L2','10')!='10' else ''}.json",{'grid_share':GRID,'curves':res,'cost':COST,'clips':len(clips),
                                                         'per_match':{m:{k:v for k,v in f.items() if not k.startswith('_')} for m,f in zip(sorted({c['youtube_id'] for c in clips}),folds)}})
         print('share         ',' '.join(f'{g:5.2f}' for g in GRID))
         for k,v in res.items():print(f"{k:14s}",' '.join(f'{x:.3f}' for x in v))
